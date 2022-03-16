@@ -1,0 +1,9 @@
+DATA_ROOT: '/hdd/lzq/PartA/biosignals_raw'
+MODEL_ROOT: '/hdd/lzq/facetrain/model'
+LOGS_ROOT: '/hdd/lzq/facetrain/logs'
+GPUID: "0"
+EPOCH: 1000
+BATCH_SIZE: 128
+EXTRACT_NUM: 512
+CLASS_NUM: 2
+TRAIN_RIO: 0.9

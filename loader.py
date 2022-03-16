@@ -1,0 +1,68 @@
+import torch
+import numpy as np
+from PIL import Image
+from utils import getSample,readCsv,fileFeatureExtraction,getFaceSample,getBioSample,extractGsr
+from torch.utils.data import Dataset,DataLoader
+from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHorizontalFlip
+
+class BioDataset(Dataset):
+
+    def __init__(self,train,train_rio,modal):
+        self.items=getBioSample('/hdd/lzq/data_2022.1.29/pain2/bio')
+        self.train_rio=int(len(self.items)*train_rio)
+        self.modal=modal
+        if train:
+            self.items=self.items[:self.train_rio]
+        else:
+            self.items=self.items[self.train_rio:]
+
+    def __len__(self):
+        return len(self.items)
+
+    def load_seq(self,file_path):
+        seq=readCsv(self.modal,file_path)
+        seq=extractGsr(seq)
+        return seq
+
+    def __getitem__(self, idr):
+        item=self.items[idr]
+        x=readCsv(self.modal,item[0])
+        x=torch.tensor(x,dtype=torch.float32)
+        sample = {'x': x,'y':int(item[-1])}
+        return sample    
+        
+   
+class FaceDataset(Dataset):
+    def __init__(self,train,train_rio):
+        self.items=getFaceSample("/hdd/lzq/data_2022.1.29/pain2/face","/hdd/lzq/data_2022.1.29/pain2/label.csv")
+        self.train_rio=int(len(self.items)*train_rio)
+        if train:
+            self.items=self.items[:self.train_rio]
+        else:
+            self.items=self.items[self.train_rio:]
+        items=[]
+        for person in self.items:
+            for img in person:
+                items.append(img)
+        self.items=items
+        self.transform = Compose([Resize(64),RandomCrop(48),RandomHorizontalFlip(),ToTensor()])
+
+    def load_img(self,file_path):
+        img = Image.open(file_path).convert('L')
+        return img
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idr):
+        item=self.items[idr]
+        img=np.array(self.load_img(item[0]))
+        img = img[:, :, np.newaxis]
+        img = np.concatenate((img, img, img), axis=2)
+        img = Image.fromarray(img)
+        img=self.transform(img)
+        sample = {'x': img,'y':item[-1]}
+        return sample
+#dataset=BioDataset(1,0.78,"/hdd/lzq/PartA/biosignals_raw")   .view(1,-1)
+
+
