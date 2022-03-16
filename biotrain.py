@@ -166,6 +166,7 @@ def main():
                   % (sum_loss / cnt, 100. * correct / total))
 
         testacc = 100. * correct / total
+        global testacc_best
         if testacc > testacc_best:
             testacc_best = testacc
             state = {

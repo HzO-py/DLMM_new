@@ -126,7 +126,7 @@ def getBioSample(root_path,label_path):
         with open(root_path_2, 'r') as f:
             reader = csv.reader(f)
             lines=[line for line in reader]
-            if len(lines)<10:
+            if len(lines)<5:
                 continue
         samples.append([root_path_2,int(label)])
     return samples 

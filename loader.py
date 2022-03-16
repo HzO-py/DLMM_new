@@ -15,23 +15,25 @@ class BioDataset(Dataset):
             self.items=self.items[:self.train_rio]
         else:
             self.items=self.items[self.train_rio:]
+        print(len(self.items))
 
     def __len__(self):
         return len(self.items)
 
     def load_seq(self,file_path):
         seq=readCsv(self.modal,file_path)
-        try:
-            seq=extractGsr(np.array(seq))
-            torch.flatten(seq)
-        except:
-            raise Exception(seq)
+        # try:
+        seq=extractGsr(np.array(seq))
+        
+        # except:
+        #     raise Exception(seq)
         return seq
 
     def __getitem__(self, idr):
         item=self.items[idr]
         x=self.load_seq(item[0])
         x=torch.tensor(x,dtype=torch.float32)
+        x=torch.flatten(x)
         sample = {'x': x,'y':int(item[-1])}
         return sample    
         
