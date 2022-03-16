@@ -123,15 +123,18 @@ def getBioSample(root_path,label_path):
         if not ret:
             continue
         root_path_2=os.path.join(root_path,person)
+        with open(root_path_2, 'r') as f:
+            reader = csv.reader(f)
+            lines=[line for line in reader]
+            if len(lines)<10:
+                continue
         samples.append([root_path_2,int(label)])
     return samples 
 
 def handFeature(input_data):
-    input_data=np.array(input_data)
-    return np.mean(input_data),np.var(input_data),
-        np.mean(np.abs(input_data)),
-        np.max(input_data)-np.min(input_data),
-        np.std(input_data)
+    #input_data=np.array(input_data)
+    return np.mean(input_data),np.var(input_data),np.mean(np.abs(input_data)),np.max(input_data)-np.min(input_data),np.std(input_data)
+
 
 def extractGsr(seq):
 
@@ -140,5 +143,7 @@ def extractGsr(seq):
     ddseq = dseq[1:] - dseq[:-1]
     # 滤波前三阶导数
     dddseq = ddseq[1:] - ddseq[:-1]
-   
-    return [handFeature(seq),handFeature(dseq),handFeature(ddseq),handFeature(dddseq)]
+    
+
+    fea=[handFeature(seq),handFeature(dseq),handFeature(ddseq),handFeature(dddseq)]
+    return np.array(fea)

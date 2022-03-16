@@ -8,7 +8,7 @@ from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHo
 class BioDataset(Dataset):
 
     def __init__(self,train,train_rio,modal):
-        self.items=getBioSample('/hdd/lzq/data_2022.1.29/pain2/bio')
+        self.items=getBioSample('/hdd/lzq/data_2022.1.29/pain2/bio',"/hdd/lzq/data_2022.1.29/pain2/label.csv")
         self.train_rio=int(len(self.items)*train_rio)
         self.modal=modal
         if train:
@@ -21,12 +21,16 @@ class BioDataset(Dataset):
 
     def load_seq(self,file_path):
         seq=readCsv(self.modal,file_path)
-        seq=extractGsr(seq)
+        try:
+            seq=extractGsr(np.array(seq))
+            torch.flatten(seq)
+        except:
+            raise Exception(seq)
         return seq
 
     def __getitem__(self, idr):
         item=self.items[idr]
-        x=readCsv(self.modal,item[0])
+        x=self.load_seq(item[0])
         x=torch.tensor(x,dtype=torch.float32)
         sample = {'x': x,'y':int(item[-1])}
         return sample    
@@ -63,6 +67,9 @@ class FaceDataset(Dataset):
         img=self.transform(img)
         sample = {'x': img,'y':item[-1]}
         return sample
-#dataset=BioDataset(1,0.78,"/hdd/lzq/PartA/biosignals_raw")   .view(1,-1)
 
-
+# dataset=BioDataset(1,0.9,"gsr")
+# train_dataloader = DataLoader(dataset, batch_size=2,shuffle=True)
+# for i,data in enumerate(train_dataloader):
+#     x,y=data.values()
+#     print(x,y)
