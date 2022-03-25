@@ -1,9 +1,11 @@
 import cv2
 import os
-import dlib
+import face_alignment
+from skimage import io
+import numpy as np
 
-detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor("/home/lzq/srp/facial/facial_emotion/FER2013_VGG19/shape_predictor_68_face_landmarks.dat")
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._3D, flip_input=False,device="cuda")
 
 def is_iou(x1,x2,y1,y2,x1_pre,x2_pre,y1_pre,y2_pre):
     xs=[x1_pre,x2_pre]
@@ -21,42 +23,50 @@ def is_iou(x1,x2,y1,y2,x1_pre,x2_pre,y1_pre,y2_pre):
     return False
 
 def face_points_detect(img,x1_pre,x2_pre,y1_pre,y2_pre):
-    gray_img=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-    faces = detector(gray_img, 1)
     
-    if len(faces)==0:
+    img=cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+    img_h=img.shape[0]
+    img_w=img.shape[1]
+    faces = fa.get_landmarks(img)
+    if faces==None:
         return None,None,x1_pre,x2_pre,y1_pre,y2_pre
 
-    u=0
+    x1,x2,y1,y2=0,0,0,0
     maxn=0
-    for i in range(len(faces)):
-        (x1,x2,y1,y2)=(faces[i].left(),faces[i].right(),faces[i].top(),faces[i].bottom())
-        h=y2-y1
-        w=x2-x1
+    pos=None
+    for face in faces:
+        xx1=int(np.min(face[:,0]))
+        xx2=int(np.max(face[:,0]))
+        yy1=int(np.min(face[:,1]))
+        yy2=int(np.max(face[:,1]))
+        w=xx2-xx1
+        h=yy2-yy1
         if h*w>maxn:
-            u=i
-   # face_img=img[y1:y2,x1:x2]
-    (x1,x2,y1,y2)=(faces[u].left(),faces[u].right(),faces[u].top(),faces[u].bottom())
+            x1,x2,y1,y2=xx1,xx2,yy1,yy2
+            maxn=h*w
+            pos=face
+            if w<h:
+                cha=(h-w)//2
+                x1=max(x1-cha,0)
+                x2=min(x2+cha,img_w)
+            else:
+                cha=(w-h)//2
+                y1=max(y1-cha,0)
+                y2=min(y2+cha,img_h)
+
     if not ((x1_pre,x2_pre,y1_pre,y2_pre)==(0,0,0,0) or is_iou(x1,x2,y1,y2,x1_pre,x2_pre,y1_pre,y2_pre)):
         return None,None,x1_pre,x2_pre,y1_pre,y2_pre
-        
+    
     face_img=img[y1:y2,x1:x2]
 
-    face_dect=predictor(gray_img, faces[u])
-    pos=[]
-    for i in range(68):
-        pos.append([face_dect.part(i).x,face_dect.part(i).y])
-        
-    #print(img)
     return face_img,pos,x1,x2,y1,y2
 
-def mp42img():
-    dir_path="/hdd/lzq/data_2022.1.29/pain2/dataset"
-    save_path="/hdd/lzq/data_2022.1.29/pain2/face"
+def mp42img(path):
+    dir_path=os.path.join(path,'video')
+    save_path=os.path.join(path,'face')
+    if not os.path.exists(save_path):
+        os.mkdir(save_path)
     for i in sorted(os.listdir(dir_path),key=lambda x:int(x.split('.')[0])):
-        # if int(i)<35:
-        #     continue
-        print(i)
         dir_path_2=os.path.join(dir_path,i)
         for j in sorted(os.listdir(dir_path_2)):
             dir_path_3=os.path.join(dir_path_2,j)
@@ -69,18 +79,29 @@ def mp42img():
             if not os.path.exists(save_path_2):
                 os.mkdir(save_path_2)
             cnt=0
+            act_cnt=0
             while cap.isOpened():
                 ret, frame = cap.read()
                 if not ret:
                     break
+                act_cnt+=1
+                if act_cnt%24!=0:
+                    continue
                 img,pos,x1,x2,y1,y2=face_points_detect(frame,x1,x2,y1,y2)
                 if img is None or img.shape[0]*img.shape[1]*img.shape[2]==0:
                     continue
+                img=cv2.cvtColor(img,cv2.COLOR_RGB2BGR)
                 cv2.imwrite(os.path.join(save_path_2,str(cnt))+".jpg",img)
-                with open(os.path.join(save_path_2,str(cnt)+".txt"),mode='w') as f:
-                    f.write(str(pos))
+                np.save(os.path.join(save_path_2,str(cnt)+".npy"),pos)
                 cnt+=1
             print(save_path_2)
             cap.release() 
      
-mp42img()
+mp42img("/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2")
+mp42img("/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1")
+mp42img("/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2")
+mp42img("/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3")
+mp42img("/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4")
+mp42img("/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3")
+mp42img("/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4")
+mp42img("/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5")
