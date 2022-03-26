@@ -39,7 +39,7 @@ class BioDataset(Dataset):
         
    
 class FaceDataset(Dataset):
-    def __init__(self,train,train_rio,paths):
+    def __init__(self,train,train_rio,paths,is_person):
         self.items=[]
         for path in paths:
             self.items+=getFaceSample(path[0],path[1],path[2])
@@ -48,13 +48,15 @@ class FaceDataset(Dataset):
             self.items=self.items[:self.train_rio]
         else:
             self.items=self.items[self.train_rio:]
-        print(len(self.items))
-        items=[]
-        for person in self.items:
-            for img in person:
-                items.append(img)
-        self.items=items
-        print(len(self.items))
+        
+        if not is_person:
+            items=[]
+            for person in self.items:
+                for img in person:
+                    items.append(img)
+            self.items=items
+        
+        self.is_person=is_person
         self.transform = Compose([Resize(64),RandomCrop(48),RandomHorizontalFlip(),ToTensor()])
 
     def load_img(self,file_path):
@@ -76,9 +78,20 @@ class FaceDataset(Dataset):
 
     def __getitem__(self, idr):
         item=self.items[idr]
-        img=self.load_img(item[0])
-        npy=self.load_npy(item[1])
-        sample = {'x1': img,'x2':npy,'y':item[-1]}
+        imgs=[]
+        npys=[]
+        label=0.0
+        sample = None
+        if not self.is_person:
+            img=self.load_img(item[0])
+            npy=self.load_npy(item[1])
+            sample = {'x1': img,'x2':npy,'y':item[-1]}
+        else:
+            for it in item:
+                imgs.append(self.load_img(it[0]))
+                npys.append(self.load_npy(it[1]))
+                label=it[-1]
+            sample = {'x1': imgs,'x2':npys,'y':label}
         return sample
 
 # dataset=BioDataset(1,0.9,"gsr")

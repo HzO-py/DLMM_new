@@ -239,5 +239,4 @@ def npyStandard(npy):
     
     npy=npy[17:]
     
-    print(npy.shape)
     return npy
