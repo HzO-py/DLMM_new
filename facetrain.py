@@ -16,7 +16,7 @@ import os
 import sys
 from torch.utils.data import DataLoader
 from utils import getCfg
-from models import Prototype,Classifier,ResNet18,cnn1d,VGG
+from models import Prototype,Classifier,ResNet18,cnn1d,VGG,Regressor
 from loader import BioDataset,FaceDataset
 import pdb
 
@@ -32,13 +32,16 @@ os.environ["CUDA_VISIBLE_DEVICES"] = cfg["GPUID"]
 EPOCH = cfg["EPOCH"]
 pre_epoch = 0  
 BATCH_SIZE = cfg["BATCH_SIZE"]
-testacc_best  = 0
+
 EXTRACT_NUM=cfg["EXTRACT_NUM"]
+HIDDEN_NUM=cfg["HIDDEN_NUM"]
 CLASS_NUM=cfg["CLASS_NUM"]
 DATA_ROOT=cfg["DATA_ROOT"]
 MODEL_ROOT=cfg["MODEL_ROOT"]
 LOGS_ROOT=cfg["LOGS_ROOT"]
 TRAIN_RIO=cfg["TRAIN_RIO"]
+DATA_PATHS=cfg["DATA_PATHS"]
+IS_POINT=cfg["IS_POINT"]
 
 def test():
     net2 = VGG("VGG19")
@@ -91,15 +94,15 @@ def main():
             if int(para[0].split(".")[1])<26:
                 para[1].requires_grad = False
 
-    net3 = Classifier(EXTRACT_NUM,CLASS_NUM).to(device) 
+    net3 = Regressor(EXTRACT_NUM,HIDDEN_NUM).to(device) 
 
-    criterion = nn.CrossEntropyLoss() 
+    criterion = nn.MSELoss() 
     
-    train_dataset=FaceDataset(1,TRAIN_RIO)
-    test_dataset=FaceDataset(0,TRAIN_RIO)
+    train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS)
+    test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS)
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE,shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,shuffle=False)
-
+    testloss_best=1e9
     for epoch in range(pre_epoch, EPOCH):
         fc_loss_all = 0.0
         if epoch < 20:
@@ -121,8 +124,8 @@ def main():
         net2.train()
         net3.train()
         for i,data in enumerate(train_dataloader):
-            x,y=data.values()
-
+            x,npy,y=data.values()
+            y=y.to(torch.float32)
             x, y = x.to(device), y.to(device)
             optimizer.zero_grad()
 
@@ -137,15 +140,15 @@ def main():
 
             # 每训练1个batch打印一次loss和准确率
             sum_loss += loss.item()
-            _, predicted = torch.max(outputs.data, 1)
-            total += y.size(0)
-            correct += predicted.eq(y.data).cpu().sum()
+            #_, predicted = outputs.data
+            #total += y.size(0)
+            #correct += predicted.eq(y.data).cpu().sum()
             
             #sys.stdout.flush()
             if i>0:
                 sys.stdout.write('\r')
-            sys.stdout.write('[epoch:%d, iter:%d] Loss: %.03f | Acc: %.3f%%'
-                  % (epoch + 1, (i + 1 ), sum_loss / (i + 1), 100. * correct / total))
+            sys.stdout.write('[epoch:%d, iter:%d] Loss: %.03f'
+                  % (epoch + 1, (i + 1 ), sum_loss / (i + 1)))
             
         
             # print('  loss:',fc_loss_all/(i+1),' acc:',acc/((i+1)*BATCH_SIZE))
@@ -158,8 +161,8 @@ def main():
         net2.eval()
         net3.eval()
         for i,data in enumerate(test_dataloader):
-            x,y=data.values()
-
+            x,npy,y=data.values()
+            y=y.to(torch.float32)
             x, y = x.to(device), y.to(device)
 
             
@@ -170,24 +173,29 @@ def main():
             cnt+=1
             # 每训练1个batch打印一次loss和准确率
             sum_loss += loss.item()
-            _, predicted = torch.max(outputs.data, 1)
-            total += y.size(0)
-            correct += predicted.eq(y.data).cpu().sum()
+            #predicted = outputs.data
+            # total += y.size(0)
+            # correct += predicted.eq(y.data).cpu().sum()
 
-        print('  [Test] Loss: %.03f | Acc: %.3f%%'
-                  % (sum_loss / cnt, 100. * correct / total))
+        print('  [Test] Loss: %.03f'
+                  % (sum_loss / cnt))
 
-        testacc = 100. * correct / total
-        if testacc > testacc_best:
-            testacc_best = testacc
+        testloss = sum_loss / cnt
+        if testloss < testloss_best:
+            testloss_best = testloss
             state = {
             'net2': net2.state_dict(),
             'net3': net3.state_dict(),
-            'acc': testacc_best,
+            'acc': testloss_best,
             'epoch': epoch,
         }
             torch.save(state, os.path.join(LOGS_ROOT,'face.t7'))            
-    print(testacc_best)
+    print(testloss_best)
             
-#main()
-test()
+train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS)
+test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS)
+train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE,shuffle=True)
+test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,shuffle=False)
+for i,data in enumerate(train_dataloader):
+    x,npy,y=data.values()
+    

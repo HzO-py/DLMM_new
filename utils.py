@@ -4,6 +4,8 @@ import os
 import yaml
 import csv
 import pdb
+import math
+import scipy.linalg as linalg
 
 label2num={"BL1":0,"PA1":1,"PA2":2,"PA3":3,"PA4":4}
 modal2num={"gsr":3,"ecg":1}
@@ -88,7 +90,7 @@ def getSample(root_path):
     return samples
 
 def getLable(label_path,person,video_id):
-    with open(label_path, 'r',encoding="utf-8") as f:
+    with open(label_path, 'r',encoding="gbk") as f:
         reader = csv.reader(f)
         lines=[line for line in reader][1:]
         for line in lines:
@@ -108,6 +110,7 @@ def getLable(label_path,person,video_id):
                         else:
                             score+=float((int(line[3])-1)*0.25)
                     if flag:
+                        
                         return True,score/2
                 elif video_id==2 or video_id==4:
                     base=1
@@ -155,7 +158,8 @@ def getFaceSample(root_path,label_path,version):
             root_path_3=os.path.join(root_path_2,video)
             for img in sorted(os.listdir(root_path_3),key=lambda x:int(x.split('.')[0])):
                 if img.endswith("jpg"):
-                    sample.append([os.path.join(root_path_3,img),int(label)])
+                    npy=img.split('.')[0]+'.npy'
+                    sample.append([os.path.join(root_path_3,img),os.path.join(root_path_3,npy),label])
         if len(sample)>0:
             samples.append(sample)
     
@@ -192,3 +196,48 @@ def extractGsr(seq):
 
     fea=[handFeature(seq),handFeature(dseq),handFeature(ddseq),handFeature(dddseq)]
     return np.array(fea)
+
+def rotate_mat(axis, radian):
+    rot_matrix = linalg.expm(np.cross(np.eye(3), axis / linalg.norm(axis) * radian))
+    return rot_matrix
+
+def rotate(a,b,axi,dim):
+    inf=1e-9
+    acos=a.dot(b) / (np.linalg.norm(a) * np.linalg.norm(b)+inf)
+    angle=0
+    if acos>1.0:
+        angle=0
+    elif acos<-1.0:
+        angle=np.pi
+    else:
+        angle=np.arccos(acos)
+    if a[dim]>0:
+        angle=-angle
+    rot_matrix=rotate_mat(axi,angle)
+    return rot_matrix
+
+def npyStandard(npy):
+    
+    npy[:]-=npy[30]
+    snor=np.linalg.norm(npy[8]-npy[30])
+    npy/=snor
+    
+    a=npy[27].copy()
+    a[0]=0
+    rot_matrix=rotate(a,np.array([0,0,1]),[1,0,0],1)
+    npy=np.dot(npy,rot_matrix)
+    
+    a=npy[27].copy()
+    a[1]=0
+    rot_matrix=rotate(a,np.array([1,0,0]),[0,1,0],2)
+    npy=np.dot(npy,rot_matrix)
+    
+    a=(npy[8]-npy[30]).copy()
+    a[0]=0
+    rot_matrix=rotate(a,np.array([0,0,1]),[1,0,0],1)
+    npy=np.dot(npy,rot_matrix)
+    
+    npy=npy[17:]
+    
+    print(npy.shape)
+    return npy

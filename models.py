@@ -69,6 +69,19 @@ class Classifier(nn.Module):# 最终的分类器，用于输出预测概率
         out = self.fc2(x)
         return out 
 
+class Regressor(nn.Module):# 最终的分类器，用于输出预测概率
+
+    def __init__(self,inputNum,hiddenNum):#初始化函数
+        super(Regressor, self).__init__()#继承父类初始化函数
+        self.fc1 = nn.Linear(inputNum, hiddenNum, bias = True)
+        self.fc2 = nn.Linear(hiddenNum, 1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = F.selu(x)
+        out = self.fc2(x)
+        return out 
+
 class ResidualBlock(nn.Module):
     def __init__(self, inchannel, outchannel, stride=1):
         super(ResidualBlock, self).__init__()
