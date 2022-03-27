@@ -3,7 +3,7 @@ import numpy as np
 from PIL import Image
 from utils import getSample,readCsv,fileFeatureExtraction,getFaceSample,getBioSample,extractGsr,npyStandard
 from torch.utils.data import Dataset,DataLoader
-from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHorizontalFlip
+from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHorizontalFlip,RandomVerticalFlip,ColorJitter
 
 class BioDataset(Dataset):
 
@@ -46,8 +46,11 @@ class FaceDataset(Dataset):
         self.train_rio=int(len(self.items)*train_rio)
         if train:
             self.items=self.items[:self.train_rio]
+            self.transform = Compose([Resize([52,52]),RandomCrop([48,48]),RandomHorizontalFlip(),RandomVerticalFlip(),ColorJitter(0.1,0.1,0.1,0.1),ToTensor()])
         else:
             self.items=self.items[self.train_rio:]
+            self.transform = Compose([Resize([52,52]),ToTensor()])
+
         
         if not is_person:
             items=[]
@@ -57,8 +60,7 @@ class FaceDataset(Dataset):
             self.items=items
         
         self.is_person=is_person
-        self.transform = Compose([Resize(64),RandomCrop(48),RandomHorizontalFlip(),ToTensor()])
-
+        
     def load_img(self,file_path):
         img = Image.open(file_path).convert('L')
         img=np.array(img)

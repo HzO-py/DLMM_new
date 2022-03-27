@@ -35,25 +35,26 @@ BATCH_SIZE = cfg["BATCH_SIZE"]
 
 EXTRACT_NUM=cfg["EXTRACT_NUM"]
 HIDDEN_NUM=cfg["HIDDEN_NUM"]
-CLASS_NUM=cfg["CLASS_NUM"]
+
 DATA_ROOT=cfg["DATA_ROOT"]
 MODEL_ROOT=cfg["MODEL_ROOT"]
 LOGS_ROOT=cfg["LOGS_ROOT"]
+MODEL_NAME=cfg["MODEL_NAME"]
+
 TRAIN_RIO=cfg["TRAIN_RIO"]
 DATA_PATHS=cfg["DATA_PATHS"]
 IS_POINT=cfg["IS_POINT"]
 
 def test():
     net2 = VGG("VGG19")
-    checkpoint = torch.load(os.path.join(LOGS_ROOT, 'face.t7'))
+    checkpoint = torch.load(os.path.join(LOGS_ROOT, MODEL_NAME))
     print(checkpoint["acc"])
     net2.load_state_dict(checkpoint['net2'])
     net2 = net2.to(device)
     net3 = Regressor(EXTRACT_NUM,HIDDEN_NUM)
     net3.load_state_dict(checkpoint['net3'])
     net3 = net3.to(device) 
-    criterion = nn.MSELoss() 
-    test_datasets=[FaceDataset(0,0,DATA_PATHS,1),FaceDataset(0,0.9,DATA_PATHS,1),FaceDataset(1,0.9,DATA_PATHS,1)]
+    test_datasets=[FaceDataset(0,0,DATA_PATHS,1)]
     test_dataloaders=[]
     for test_dataset in test_datasets:
         test_dataloaders.append(DataLoader(test_dataset, batch_size=1,shuffle=False))
@@ -63,17 +64,19 @@ def test():
         pre=0.0
         net2.eval()
         net3.eval()
-        for i,data in enumerate(test_dataloader):
-            xs,npys,y=data.values()
-            y=float(y)
-            for x in xs:
-                x = x.to(device)
-                x = net2(x)
-                outputs = net3(x)
-                pre+=float(outputs.data.cpu()[0])
-            pre/=len(xs)
-            sum_loss+=(pre-y)**2
-            cnt+=1
+        with torch.no_grad():
+            for i,data in enumerate(test_dataloader):
+                xs,npys,y=data.values()
+                y=float(y)
+                for x in xs:
+                    x = x.to(device)
+                    x = net2(x)
+                    outputs = net3(x)
+                    pre+=float(outputs.data.cpu()[0])
+                pre/=len(xs)
+                #print(pre,y,abs(pre-y))
+                sum_loss+=abs(pre-y)
+                cnt+=1
         print('  [Test] Loss: %.03f'
                   % (sum_loss / cnt))
 
@@ -97,28 +100,18 @@ def main():
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,shuffle=False)
     testloss_best=1e9
     for epoch in range(pre_epoch, EPOCH):
-        fc_loss_all = 0.0
-        if epoch < 20:
-            LR = 0.001
-        elif epoch < 100:
-            LR = 0.0001
-        elif epoch < 160:
-            LR = 0.00001
-        else :
-            LR =0.00001
-       
-        optimizer = optim.Adam(itertools.chain(filter(lambda p: p.requires_grad, net2.parameters()),net3.parameters()), lr=LR)
+
+        optimizer = optim.Adam(itertools.chain(filter(lambda p: p.requires_grad, net2.parameters()),net3.parameters()), lr=1e-4,weight_decay=1e-5)
         print('\nEpoch: %d' % (epoch + 1))
         
         sum_loss = 0.0
-        correct = 0.0
-        total = 0.0
-        acc = 0
+
         net2.train()
         net3.train()
         for i,data in enumerate(train_dataloader):
             x,npy,y=data.values()
             y=y.to(torch.float32).unsqueeze(1)
+            y = y + 0.1*torch.randn(y.size()[0],1)
 
             x, y = x.to(device), y.to(device)
             optimizer.zero_grad()
@@ -148,28 +141,27 @@ def main():
             # print('  loss:',fc_loss_all/(i+1),' acc:',acc/((i+1)*BATCH_SIZE))
         ####################################################################################
         sum_loss = 0.0
-        correct = 0.0
-        total = 0.0
-        acc = 0
+
         cnt=0
         net2.eval()
         net3.eval()
-        for i,data in enumerate(test_dataloader):
-            x,npy,y=data.values()
-            y=y.to(torch.float32).unsqueeze(1)
-            x, y = x.to(device), y.to(device)
+        with torch.no_grad():
+            for i,data in enumerate(test_dataloader):
+                x,npy,y=data.values()
+                y=y.to(torch.float32).unsqueeze(1)
+                x, y = x.to(device), y.to(device)
 
-            
-            x = net2(x)
-            outputs = net3(x)
-            
-            loss = criterion(outputs, y)
-            cnt+=1
-            # 每训练1个batch打印一次loss和准确率
-            sum_loss += loss.item()
-            #predicted = outputs.data
-            # total += y.size(0)
-            # correct += predicted.eq(y.data).cpu().sum()
+                
+                x = net2(x)
+                outputs = net3(x)
+                
+                loss = criterion(outputs, y)
+                cnt+=1
+                # 每训练1个batch打印一次loss和准确率
+                sum_loss += loss.item()
+                #predicted = outputs.data
+                # total += y.size(0)
+                # correct += predicted.eq(y.data).cpu().sum()
 
         print('  [Test] Loss: %.03f'
                   % (sum_loss / cnt))
@@ -183,14 +175,8 @@ def main():
             'acc': testloss_best,
             'epoch': epoch,
         }
-            torch.save(state, os.path.join(LOGS_ROOT,'face.t7'))            
+            torch.save(state, os.path.join(LOGS_ROOT,MODEL_NAME))            
     print(testloss_best)
             
-# train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS)
-# test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS)
-# train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE,shuffle=True)
-# test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,shuffle=False)
-# for i,data in enumerate(train_dataloader):
-#     x,npy,y=data.values()
-main()
+test()
     

@@ -1,12 +1,12 @@
 DATA_ROOT: '/hdd/lzq/PartA/biosignals_raw'
 MODEL_ROOT: '/hdd/sdd/lzq/DLMM_new/model'
 LOGS_ROOT: '/hdd/sdd/lzq/DLMM_new/model/logs'
+MODEL_NAME: 'face_v2.t7'
 GPUID: "0"
-EPOCH: 1000
+EPOCH: 10
 BATCH_SIZE: 512
 EXTRACT_NUM: 512
 HIDDEN_NUM: 64
-CLASS_NUM: 2
 TRAIN_RIO: 0.9
 DATA_PATHS: [
   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2/face","/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2/label.csv",1],

@@ -57,8 +57,7 @@ def fileFeatureExtraction(rawData):
     if len(fTemp) == 0:
         pass
     else:
-        if np.isnan(fTemp).any():
-            print( fTemp, fileName)
+        
         centroid=spectralCentroid(fTemp)    # compute spectral centroid
         rolloff=stSpectralRollOff(fTemp, c) # compute spectral rolloff
     #pdb.set_trace()
