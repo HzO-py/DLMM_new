@@ -45,6 +45,7 @@ LOGS_ROOT=cfg["LOGS_ROOT"]
 MODEL_NAME=cfg["MODEL_NAME"]
 
 CLS_THRESHOLD=cfg["CLS_THRESHOLD"]
+R_THRESHOLD=cfg["R_THRESHOLD"]
 TRAIN_RIO=cfg["TRAIN_RIO"]
 DATA_PATHS=cfg["DATA_PATHS"]
 IS_POINT=cfg["IS_POINT"]
@@ -58,7 +59,11 @@ def test():
     net3 = Regressor(EXTRACT_NUM,HIDDEN_NUM)
     net3.load_state_dict(checkpoint['net3'])
     net3 = net3.to(device) 
-    test_datasets=[FaceDataset(0,0,DATA_PATHS,is_person=1,cls_threshold=CLS_THRESHOLD)]
+
+    test_datasets=[FaceDataset(0,0,DATA_PATHS,is_person=1,cls_threshold=CLS_THRESHOLD,r_threshold=R_THRESHOLD),
+    FaceDataset(0,TRAIN_RIO,DATA_PATHS,is_person=1,cls_threshold=CLS_THRESHOLD,r_threshold=R_THRESHOLD),
+    FaceDataset(1,TRAIN_RIO,DATA_PATHS,is_person=1,cls_threshold=CLS_THRESHOLD,r_threshold=R_THRESHOLD)]
+
     test_dataloaders=[]
     for test_dataset in test_datasets:
         test_dataloaders.append(DataLoader(test_dataset, batch_size=1,shuffle=False))
@@ -101,8 +106,8 @@ def main():
 
     criterion = nn.MSELoss() 
     
-    train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD)
-    test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD)
+    train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD,r_threshold=R_THRESHOLD)
+    test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD,r_threshold=R_THRESHOLD)
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE,shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,shuffle=False)
     testloss_best=1e9
@@ -188,7 +193,7 @@ def main():
 
 def cls_train():
     net2 = VGG("VGG19")
-    checkpoint = torch.load(os.path.join(LOGS_ROOT, "face_v3.1.1.t7"))
+    checkpoint = torch.load(os.path.join(LOGS_ROOT, "face_v3.2.t7"))
     print(checkpoint["acc"])
     net2.load_state_dict(checkpoint['net2'])
     #checkpoint = torch.load(os.path.join(MODEL_ROOT, 'PrivateTest_model.t7'))
@@ -199,13 +204,14 @@ def cls_train():
             if int(para[0].split(".")[1])<26:
                 para[1].requires_grad = False
 
-    net3 = Classifier(EXTRACT_NUM,HIDDEN_NUM,CLASS_NUM).to(device) 
+    net3 = Classifier(EXTRACT_NUM,HIDDEN_NUM,CLASS_NUM)
     net3.load_state_dict(checkpoint['net3'])
+    net3 = net3.to(device)
 
     criterion = nn.CrossEntropyLoss() 
     
-    train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD)
-    test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD)
+    train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD,r_threshold=R_THRESHOLD)
+    test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD,r_threshold=R_THRESHOLD)
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE,shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,shuffle=False)
     testacc_best  = 0.0

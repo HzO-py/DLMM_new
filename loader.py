@@ -42,7 +42,7 @@ class BioDataset(Dataset):
         
    
 class FaceDataset(Dataset):
-    def __init__(self,train,train_rio,paths,is_person,cls_threshold):
+    def __init__(self,train,train_rio,paths,is_person,cls_threshold,r_threshold):
         self.items=[]
         for path in paths:
             self.items+=getFaceSample(path[0],path[1],path[2])
@@ -79,11 +79,12 @@ class FaceDataset(Dataset):
                 self.items=items
         
         self.is_person=is_person
+        self.r_threshold=r_threshold
 
         if cls_threshold is None:
             self.videoInit()
 
-        print(len(self.items))
+        print(len(self.items),self.r_threshold)
 
     def videoInit(self):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -99,22 +100,11 @@ class FaceDataset(Dataset):
         
         items=[]
 
-        u=0.0
-        pathname=""
-        one=0
-        zero=0
-
         net2.eval()
         net3.eval()
         with torch.no_grad():
             for item in self.items:
-                if item[-1]>0.5:
-                    if item[-1]!=u:
-                        if u>0.5 and u<0.7 and zero/(one+zero)>0.5:
-                            print(pathname)
-                            print(u,zero/(one+zero))
-                        one=0
-                        zero=0
+                if item[-1]>self.r_threshold:
 
                     x=self.load_img(item[0]).unsqueeze(0).to(device)
                     x = net2(x)
@@ -122,13 +112,9 @@ class FaceDataset(Dataset):
                     _, predicted = torch.max(outputs.data, 1)
                     predicted=int(predicted.cpu())
 
-                    u=item[-1]
-                    pathname=item[0]
-
                     if predicted==0:
-                        zero+=1
-                    else:
-                        one+=1
+                        continue
+                
                 items.append(item)
         self.items=items
 

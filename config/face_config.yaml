@@ -12,6 +12,7 @@ HIDDEN_NUM: 64
 CLASS_NUM: 2
 
 CLS_THRESHOLD: 
+R_THRESHOLD: 0.5
 TRAIN_RIO: 0.9
 DATA_PATHS: [
   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2/face","/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2/label.csv",1],
