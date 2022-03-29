@@ -1,0 +1,10 @@
+DATA_ROOT: '/hdd/lzq/PartA/biosignals_raw'
+MODEL_ROOT: '/hdd/lzq/biotrain/model'
+LOGS_ROOT: '/hdd/lzq/biotrain/logs'
+GPUID: "0"
+EPOCH: 100
+BATCH_SIZE: 1024
+EXTRACT_NUM: 20
+CLASS_NUM: 2
+TRAIN_RIO: 0.9
+MODAL: "gsr"

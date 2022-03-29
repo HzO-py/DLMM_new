@@ -179,6 +179,30 @@ def getBioSample(root_path,label_path):
         samples.append([root_path_2,int(label)])
     return samples 
 
+def getVoiceSample(root_path,label_path,version):
+    samples=[]
+    for person in sorted(os.listdir(root_path),key=lambda x:int(x)):
+        
+        
+        sample=[]
+        root_path_2=os.path.join(root_path,person)
+        for video in os.listdir(root_path_2):
+            video_id=-1
+            if version==2:
+                video_id=int(video.split('.')[0].split('-')[-1])
+            ret,label=getLable(label_path,person,video_id)
+            if not ret:
+                continue
+            root_path_3=os.path.join(root_path_2,video)
+            for img in sorted(os.listdir(root_path_3),key=lambda x:int(x.split('.')[0])):
+                if img.endswith("jpg"):
+                    npy=img.split('.')[0]+'.npy'
+                    sample.append([os.path.join(root_path_3,img),os.path.join(root_path_3,npy),label])
+        if len(sample)>0:
+            samples.append(sample)
+    
+    return samples 
+
 def handFeature(input_data):
     #input_data=np.array(input_data)
     return np.mean(input_data),np.var(input_data),np.mean(np.abs(input_data)),np.max(input_data)-np.min(input_data),np.std(input_data)

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from PIL import Image
-from utils import getSample,readCsv,fileFeatureExtraction,getFaceSample,getBioSample,extractGsr,npyStandard
+from utils import getSample,readCsv,fileFeatureExtraction,getFaceSample,getBioSample,extractGsr,npyStandard,getVoiceSample
 from torch.utils.data import Dataset,DataLoader
 from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHorizontalFlip,RandomVerticalFlip,ColorJitter
 
@@ -39,10 +39,76 @@ class BioDataset(Dataset):
         
    
 class FaceDataset(Dataset):
-    def __init__(self,train,train_rio,paths,is_person):
+    def __init__(self,train,train_rio,paths,is_person,cls_threshold):
         self.items=[]
         for path in paths:
             self.items+=getFaceSample(path[0],path[1],path[2])
+        self.train_rio=int(len(self.items)*train_rio)
+        if train:
+            self.items=self.items[:self.train_rio]
+            self.transform = Compose([Resize([52,52]),RandomCrop([48,48]),RandomHorizontalFlip(),RandomVerticalFlip(),ColorJitter(0.1,0.1,0.1,0.1),ToTensor()])
+        else:
+            self.items=self.items[self.train_rio:]
+            self.transform = Compose([Resize([52,52]),ToTensor()])
+
+        
+        if not is_person:
+            items=[]
+            for person in self.items:
+                for img in person:
+                    if cls_threshold is not None:
+                        if float(img[-1])<=cls_threshold[0]:
+                            img[-1]=int(0)
+                        elif float(img[-1])>=cls_threshold[1]:
+                            img[-1]=int(1)
+                        else:
+                            continue
+                    items.append(img)
+            self.items=items
+        
+        self.is_person=is_person
+
+        print(len(self.items))
+        
+    def load_img(self,file_path):
+        img = Image.open(file_path).convert('L')
+        img=np.array(img)
+        img = img[:, :, np.newaxis]
+        img = np.concatenate((img, img, img), axis=2)
+        img = Image.fromarray(img)
+        img=self.transform(img)
+        return img
+
+    def load_npy(self,file_path):
+        npy=np.load(file_path)
+        npy=npyStandard(npy)
+        return npy
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idr):
+        item=self.items[idr]
+        imgs=[]
+        npys=[]
+        sample = None
+        if not self.is_person:
+            img=self.load_img(item[0])
+            npy=self.load_npy(item[1])
+            sample = {'x1': img,'x2':npy,'y':item[-1]}
+        else:
+            for it in item:
+                imgs.append(self.load_img(it[0]))
+                npys.append(self.load_npy(it[1]))
+                label=it[-1]
+            sample = {'x1': imgs,'x2':npys,'y':label}
+        return sample
+
+class VoiceDataset(Dataset):
+    def __init__(self,train,train_rio,paths,is_person):
+        self.items=[]
+        for path in paths:
+            self.items+=getVoiceSample(path[0],path[1],path[2])
         self.train_rio=int(len(self.items)*train_rio)
         if train:
             self.items=self.items[:self.train_rio]
@@ -95,7 +161,6 @@ class FaceDataset(Dataset):
                 label=it[-1]
             sample = {'x1': imgs,'x2':npys,'y':label}
         return sample
-
 # dataset=BioDataset(1,0.9,"gsr")
 # train_dataloader = DataLoader(dataset, batch_size=2,shuffle=True)
 # for i,data in enumerate(train_dataloader):
