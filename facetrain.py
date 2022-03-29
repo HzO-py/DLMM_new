@@ -58,7 +58,7 @@ def test():
     net3 = Regressor(EXTRACT_NUM,HIDDEN_NUM)
     net3.load_state_dict(checkpoint['net3'])
     net3 = net3.to(device) 
-    test_datasets=[FaceDataset(0,0,DATA_PATHS,1)]
+    test_datasets=[FaceDataset(0,0,DATA_PATHS,is_person=1,cls_threshold=CLS_THRESHOLD)]
     test_dataloaders=[]
     for test_dataset in test_datasets:
         test_dataloaders.append(DataLoader(test_dataset, batch_size=1,shuffle=False))
@@ -101,8 +101,8 @@ def main():
 
     criterion = nn.MSELoss() 
     
-    train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,0)
-    test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS,0)
+    train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD)
+    test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS,is_person=0,cls_threshold=CLS_THRESHOLD)
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE,shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,shuffle=False)
     testloss_best=1e9
@@ -188,8 +188,11 @@ def main():
 
 def cls_train():
     net2 = VGG("VGG19")
-    checkpoint = torch.load(os.path.join(MODEL_ROOT, 'PrivateTest_model.t7'))
-    net2.load_state_dict(checkpoint['net'])
+    checkpoint = torch.load(os.path.join(LOGS_ROOT, "face_v3.1.1.t7"))
+    print(checkpoint["acc"])
+    net2.load_state_dict(checkpoint['net2'])
+    #checkpoint = torch.load(os.path.join(MODEL_ROOT, 'PrivateTest_model.t7'))
+    #net2.load_state_dict(checkpoint['net'])
     net2 = net2.to(device)
     for para in net2.named_parameters():
         if para[0].startswith("features"):
@@ -197,7 +200,7 @@ def cls_train():
                 para[1].requires_grad = False
 
     net3 = Classifier(EXTRACT_NUM,HIDDEN_NUM,CLASS_NUM).to(device) 
-
+    net3.load_state_dict(checkpoint['net3'])
 
     criterion = nn.CrossEntropyLoss() 
     
@@ -275,7 +278,7 @@ def cls_train():
         print('  [Test] Loss: %.03f | Acc: %.3f%%'
                   % (sum_loss / cnt, 100. * correct / total))
 
-        testacc = sum_loss / cnt
+        testacc = 100. * correct / total
         if testacc > testacc_best:
             testacc_best = testacc
             state = {
@@ -287,5 +290,5 @@ def cls_train():
             torch.save(state, os.path.join(LOGS_ROOT,MODEL_NAME))            
     print(testacc_best)
 
-cls_train()
+main()
     

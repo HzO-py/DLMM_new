@@ -4,6 +4,9 @@ from PIL import Image
 from utils import getSample,readCsv,fileFeatureExtraction,getFaceSample,getBioSample,extractGsr,npyStandard,getVoiceSample
 from torch.utils.data import Dataset,DataLoader
 from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHorizontalFlip,RandomVerticalFlip,ColorJitter
+import random
+import os
+from models import Prototype,Classifier,ResNet18,cnn1d,VGG,Regressor
 
 class BioDataset(Dataset):
 
@@ -51,25 +54,84 @@ class FaceDataset(Dataset):
             self.items=self.items[self.train_rio:]
             self.transform = Compose([Resize([52,52]),ToTensor()])
 
-        
+        items,items1,items2=[],[],[]
         if not is_person:
-            items=[]
             for person in self.items:
                 for img in person:
                     if cls_threshold is not None:
                         if float(img[-1])<=cls_threshold[0]:
                             img[-1]=int(0)
+                            items1.append(img)
                         elif float(img[-1])>=cls_threshold[1]:
                             img[-1]=int(1)
-                        else:
-                            continue
-                    items.append(img)
-            self.items=items
+                            items2.append(img)
+                    else:
+                        items.append(img)
+            if cls_threshold is not None:
+                if train:
+                    if len(items1)>len(items2):
+                        self.items=random.sample(items1,len(items2))+items2
+                    else:
+                        self.items=random.sample(items2,len(items1))+items1
+                else:
+                    self.items=items1+items2
+            else:    
+                self.items=items
         
         self.is_person=is_person
 
+        if cls_threshold is None:
+            self.videoInit()
+
         print(len(self.items))
+
+    def videoInit(self):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        net2 = VGG("VGG19")
+        checkpoint = torch.load(os.path.join("/hdd/sdd/lzq/DLMM_new/model/logs/face_v3.2.t7"))
+        print(checkpoint["acc"])
+        net2.load_state_dict(checkpoint['net2'])
+        net2 = net2.to(device)
+        net3 = Classifier(512,64,2)
+        net3.load_state_dict(checkpoint['net3'])
+        net3 = net3.to(device)
         
+        items=[]
+
+        u=0.0
+        pathname=""
+        one=0
+        zero=0
+
+        net2.eval()
+        net3.eval()
+        with torch.no_grad():
+            for item in self.items:
+                if item[-1]>0.5:
+                    if item[-1]!=u:
+                        if u>0.5 and u<0.7 and zero/(one+zero)>0.5:
+                            print(pathname)
+                            print(u,zero/(one+zero))
+                        one=0
+                        zero=0
+
+                    x=self.load_img(item[0]).unsqueeze(0).to(device)
+                    x = net2(x)
+                    outputs = net3(x)
+                    _, predicted = torch.max(outputs.data, 1)
+                    predicted=int(predicted.cpu())
+
+                    u=item[-1]
+                    pathname=item[0]
+
+                    if predicted==0:
+                        zero+=1
+                    else:
+                        one+=1
+                items.append(item)
+        self.items=items
+
     def load_img(self,file_path):
         img = Image.open(file_path).convert('L')
         img=np.array(img)
