@@ -16,8 +16,8 @@ import os
 import sys
 from torch.utils.data import DataLoader
 from utils import getCfg
-from models import Prototype,Classifier,ResNet18,cnn1d,VGG,Regressor,TemporalConvNet
-from loader import BioDataset,FaceDataset
+from models import Prototype,Classifier,ResNet18,cnn1d,VGG,Regressor,TemporalConvNet,VoiceCNN
+from loader import BioDataset,FaceDataset,VoiceDataset
 import pdb
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

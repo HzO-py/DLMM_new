@@ -7,6 +7,7 @@ from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHo
 import random
 import os
 from models import Prototype,Classifier,ResNet18,cnn1d,VGG,Regressor
+import torchvision.transforms.functional as tf
 
 class BioDataset(Dataset):
 
@@ -42,146 +43,66 @@ class BioDataset(Dataset):
         
    
 class FaceDataset(Dataset):
-    def __init__(self,train,train_rio,paths,is_person,cls_threshold,r_threshold):
+    def __init__(self,train,train_rio,paths,is_person,tcn_num=1):
+        self.train=train
+        self.is_person=is_person
         self.items=[]
+
         for path in paths:
             self.items+=getFaceSample(path[0],path[1],path[2])
+
         self.train_rio=int(len(self.items)*train_rio)
+
         if train:
             self.items=self.items[:self.train_rio]
-            self.transform = Compose([Resize([52,52]),RandomCrop([48,48]),RandomHorizontalFlip(),RandomVerticalFlip(),ColorJitter(0.1,0.1,0.1,0.1),ToTensor()])
+            self.transform = Compose([Resize([52,52]),RandomCrop([48,48]),RandomHorizontalFlip(),RandomVerticalFlip(),ToTensor()])
         else:
             self.items=self.items[self.train_rio:]
-            self.transform = Compose([Resize([52,52]),ToTensor()])
+            self.transform = Compose([Resize([48,48]),ToTensor()])
 
-        items,items1,items2=[],[],[]
-        if not is_person:
-            for person in self.items:
-                for img in person:
-                    if cls_threshold is not None:
-                        if float(img[-1])<=cls_threshold[0]:
-                            img[-1]=int(0)
-                            items1.append(img)
-                        elif float(img[-1])>=cls_threshold[1]:
-                            img[-1]=int(1)
-                            items2.append(img)
-                    else:
-                        items.append(img)
-            if cls_threshold is not None:
-                if train:
-                    if len(items1)>len(items2):
-                        self.items=random.sample(items1,len(items2))+items2
-                    else:
-                        self.items=random.sample(items2,len(items1))+items1
-                else:
-                    self.items=items1+items2
-            else:    
-                self.items=items
-        
-        self.is_person=is_person
-        self.r_threshold=r_threshold
-
-        if cls_threshold is None:
-            self.videoInit()
-
-        print(len(self.items),self.r_threshold)
-
-    def videoInit(self):
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-        net2 = VGG("VGG19")
-        checkpoint = torch.load(os.path.join("/hdd/sdd/lzq/DLMM_new/model/logs/face_v3.2.t7"))
-        print(checkpoint["acc"])
-        net2.load_state_dict(checkpoint['net2'])
-        net2 = net2.to(device)
-        net3 = Classifier(512,64,2)
-        net3.load_state_dict(checkpoint['net3'])
-        net3 = net3.to(device)
-        
         items=[]
-
-        net2.eval()
-        net3.eval()
-        with torch.no_grad():
-            for item in self.items:
-                if item[-1]>self.r_threshold:
-
-                    x=self.load_img(item[0]).unsqueeze(0).to(device)
-                    x = net2(x)
-                    outputs = net3(x)
-                    _, predicted = torch.max(outputs.data, 1)
-                    predicted=int(predicted.cpu())
-
-                    if predicted==0:
-                        continue
-                
-                items.append(item)
-        self.items=items
-
-    def load_img(self,file_path):
-        img = Image.open(file_path).convert('L')
-        img=np.array(img)
-        img = img[:, :, np.newaxis]
-        img = np.concatenate((img, img, img), axis=2)
-        img = Image.fromarray(img)
-        img=self.transform(img)
-        return img
-
-    def load_npy(self,file_path):
-        npy=np.load(file_path)
-        npy=npyStandard(npy)
-        return npy
-
-    def __len__(self):
-        return len(self.items)
-
-    def __getitem__(self, idr):
-        item=self.items[idr]
-        imgs=[]
-        npys=[]
-        sample = None
-        if not self.is_person:
-            img=self.load_img(item[0])
-            npy=self.load_npy(item[1])
-            sample = {'x1': img,'x2':npy,'y':item[-1]}
-        else:
-            for it in item:
-                imgs.append(self.load_img(it[0]))
-                npys.append(self.load_npy(it[1]))
-                label=it[-1]
-            sample = {'x1': imgs,'x2':npys,'y':label}
-        return sample
-
-class VoiceDataset(Dataset):
-    def __init__(self,train,train_rio,paths,is_person):
-        self.items=[]
-        for path in paths:
-            self.items+=getVoiceSample(path[0],path[1],path[2])
-        self.train_rio=int(len(self.items)*train_rio)
-        if train:
-            self.items=self.items[:self.train_rio]
-            self.transform = Compose([Resize([52,52]),RandomCrop([48,48]),RandomHorizontalFlip(),RandomVerticalFlip(),ColorJitter(0.1,0.1,0.1,0.1),ToTensor()])
-        else:
-            self.items=self.items[self.train_rio:]
-            self.transform = Compose([Resize([52,52]),ToTensor()])
-
         
         if not is_person:
-            items=[]
             for person in self.items:
                 for img in person:
                     items.append(img)
             self.items=items
-        
-        self.is_person=is_person
-        
-    def load_img(self,file_path):
+        else:
+            self.transform = Compose([Resize([48,48]),ToTensor()])
+            
+            for person in self.items:
+                i=0
+                LEN=len(person)
+
+                while i<LEN:
+                    item=[]
+                    choose_num=[x for x in range(i,i+min(tcn_num,LEN-i))]
+                    if (LEN-i)<tcn_num:
+                        for _ in range(tcn_num-(LEN-i)):
+                            randint=random.randint(i,LEN-1)
+                            choose_num.append(randint)
+                        choose_num.sort()
+
+                    for k in choose_num:
+                        item.append(person[k])
+                    items.append(item)
+
+                    i+=tcn_num
+
+        self.items=items
+        print(len(self.items))
+
+    def load_img(self,file_path,hf=0.0,vf=0.0):
         img = Image.open(file_path).convert('L')
         img=np.array(img)
         img = img[:, :, np.newaxis]
         img = np.concatenate((img, img, img), axis=2)
         img = Image.fromarray(img)
         img=self.transform(img)
+        if hf>0.5:
+            img=tf.hflip(img)
+        if vf>0.5:
+            img=tf.vflip(img)
         return img
 
     def load_npy(self,file_path):
@@ -203,14 +124,108 @@ class VoiceDataset(Dataset):
             npy=self.load_npy(item[1])
             sample = {'x1': img,'x2':npy,'y':item[-1]}
         else:
+            hf,vf=0.0,0.0
+            if self.train:
+                hf=random.random()
+                vf=random.random()
             for it in item:
-                imgs.append(self.load_img(it[0]))
+                imgs.append(self.load_img(it[0],hf,vf))
                 npys.append(self.load_npy(it[1]))
                 label=it[-1]
+            imgs=torch.stack(imgs)
             sample = {'x1': imgs,'x2':npys,'y':label}
         return sample
-# dataset=BioDataset(1,0.9,"gsr")
-# train_dataloader = DataLoader(dataset, batch_size=2,shuffle=True)
-# for i,data in enumerate(train_dataloader):
-#     x,y=data.values()
-#     print(x,y)
+
+class VoiceDataset(Dataset):
+    def __init__(self,train,train_rio,paths,is_person,tcn_num=1):
+        self.train=train
+        self.is_person=is_person
+        self.items=[]
+
+        for path in paths:
+            self.items+=getFaceSample(path[0],path[1],path[2])
+
+        self.train_rio=int(len(self.items)*train_rio)
+
+        if train:
+            self.items=self.items[:self.train_rio]
+            self.transform = Compose([Resize([52,52]),RandomCrop([48,48]),RandomHorizontalFlip(),RandomVerticalFlip(),ToTensor()])
+        else:
+            self.items=self.items[self.train_rio:]
+            self.transform = Compose([Resize([48,48]),ToTensor()])
+
+        items=[]
+        
+        if not is_person:
+            for person in self.items:
+                for img in person:
+                    items.append(img)
+            self.items=items
+        else:
+            self.transform = Compose([Resize([48,48]),ToTensor()])
+            
+            for person in self.items:
+                i=0
+                LEN=len(person)
+
+                while i<LEN:
+                    item=[]
+                    choose_num=[x for x in range(i,i+min(tcn_num,LEN-i))]
+                    if (LEN-i)<tcn_num:
+                        for _ in range(tcn_num-(LEN-i)):
+                            randint=random.randint(i,LEN-1)
+                            choose_num.append(randint)
+                        choose_num.sort()
+
+                    for k in choose_num:
+                        item.append(person[k])
+                    items.append(item)
+
+                    i+=tcn_num
+
+        self.items=items
+        print(len(self.items))
+
+    def load_img(self,file_path,hf=0.0,vf=0.0):
+        img = Image.open(file_path).convert('L')
+        img=np.array(img)
+        img = img[:, :, np.newaxis]
+        img = np.concatenate((img, img, img), axis=2)
+        img = Image.fromarray(img)
+        img=self.transform(img)
+        if hf>0.5:
+            img=tf.hflip(img)
+        if vf>0.5:
+            img=tf.vflip(img)
+        return img
+
+    def load_npy(self,file_path):
+        npy=np.load(file_path)
+        npy=npyStandard(npy)
+        return npy
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, idr):
+        item=self.items[idr]
+        imgs=[]
+        npys=[]
+        label=0.0
+        sample = None
+        if not self.is_person:
+            img=self.load_img(item[0])
+            npy=self.load_npy(item[1])
+            sample = {'x1': img,'x2':npy,'y':item[-1]}
+        else:
+            hf,vf=0.0,0.0
+            if self.train:
+                hf=random.random()
+                vf=random.random()
+            for it in item:
+                imgs.append(self.load_img(it[0],hf,vf))
+                npys.append(self.load_npy(it[1]))
+                label=it[-1]
+            imgs=torch.stack(imgs)
+            sample = {'x1': imgs,'x2':npys,'y':label}
+        return sample

@@ -10,7 +10,7 @@ import scipy.linalg as linalg
 label2num={"BL1":0,"PA1":1,"PA2":2,"PA3":3,"PA4":4}
 modal2num={"gsr":3,"ecg":1}
 
-abc2num={"A":0.0,"B":0.25,"C":0.5,"D":0.75,"E":1.0}
+abc2num={"A":0.0,"B":0.2,"C":0.4,"D":0.6,"E":0.8,"F":1.0}
 
 def spectralCentroid(X):
     """Computes spectral centroid of frame (given abs(FFT))"""
@@ -98,46 +98,45 @@ def getLable(label_path,person,video_id):
                     if line[1]!="":
                         return True,float(int(line[1])/10)
                     score=0.0
-                    flag=False
+                    flag=0
                     if line[2]!="":
-                        flag=True
+                        flag+=1
                         score+=float(int(line[2])/10)
                     if line[3]!="":
-                        flag=True
-                        if line[3] in ["A","B","C","D","E"]:
+                        flag+=1
+                        if line[3] in abc2num.keys():
                             score+=float(abc2num[line[3]])
                         else:
                             score+=float((int(line[3])-1)*0.25)
-                    if flag:
-                        
-                        return True,score/2
+                    if flag>0:
+                        return True,score/flag
                 elif video_id==2 or video_id==4:
                     base=1
                     if video_id==4:
                         base=5
                     score=0.0
-                    flag=False
+                    flag=0
                     if line[base]!="":
-                        flag=True
+                        flag+=1
                         score+=float(int(line[base])/10)
                     if line[base+1]!="":
-                        flag=True
+                        flag+=1
                         score+=float(int(line[base+1])/10)
-                    if flag:
-                        return True,score/2
+                    if flag>0:
+                        return True,score/flag
                     score=0.0
-                    flag=False
+                    flag=0
                     if line[base+2]!="":
-                        flag=True
+                        flag+=1
                         score+=float(int(line[base+2])/10)
                     if line[base+3]!="":
-                        flag=True
-                        if line[base+3] in ["A","B","C","D","E"]:
+                        flag+=1
+                        if line[base+3] in abc2num.keys():
                             score+=float(abc2num[line[base+3]])
                         else:
-                            score+=float((int(line[base+3])-1)*0.25)
-                    if flag:
-                        return True,score/2
+                            score+=float((int(line[base+3])-1)*0.2)
+                    if flag>0:
+                        return True,score/flag
     return False,False
 
 def getFaceSample(root_path,label_path,version):
@@ -182,11 +181,11 @@ def getBioSample(root_path,label_path):
 def getVoiceSample(root_path,label_path,version):
     samples=[]
     for person in sorted(os.listdir(root_path),key=lambda x:int(x)):
-        
-        
         sample=[]
         root_path_2=os.path.join(root_path,person)
         for video in os.listdir(root_path_2):
+            if not video.endswith('_folder'):
+                continue
             video_id=-1
             if version==2:
                 video_id=int(video.split('.')[0].split('-')[-1])
@@ -194,10 +193,9 @@ def getVoiceSample(root_path,label_path,version):
             if not ret:
                 continue
             root_path_3=os.path.join(root_path_2,video)
-            for img in sorted(os.listdir(root_path_3),key=lambda x:int(x.split('.')[0])):
-                if img.endswith("jpg"):
-                    npy=img.split('.')[0]+'.npy'
-                    sample.append([os.path.join(root_path_3,img),os.path.join(root_path_3,npy),label])
+            for wav in sorted(os.listdir(root_path_3),key=lambda x:int(x.split('.')[0])):
+                if wav.endswith("wav"):
+                    sample.append([os.path.join(root_path_3,wav),label])
         if len(sample)>0:
             samples.append(sample)
     

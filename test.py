@@ -74,7 +74,20 @@ def face_points_detect(filename):
 
 #face_points_detect("/hdd/sdd/lzq/DLMM_new/test/img.jpg")
 #main("/home/lzq/srp/DLMM_new/test/pain.png")
-input = io.imread("/hdd/sdd/lzq/DLMM_new/test/img.jpg")
-input2=cv2.imread("/hdd/sdd/lzq/DLMM_new/test/img.jpg")
-input2=cv2.cvtColor(input2,cv2.COLOR_BGR2RGB)
-print(input.shape)
+# input = io.imread("/hdd/sdd/lzq/DLMM_new/test/img.jpg")
+# input2=cv2.imread("/hdd/sdd/lzq/DLMM_new/test/img.jpg")
+# input2=cv2.cvtColor(input2,cv2.COLOR_BGR2RGB)
+# print(input.shape)
+import scipy.io.wavfile as wav
+from python_speech_features import mfcc
+import time
+
+starttime = time.time()
+for i in range(29):
+    (rate,sig) = wav.read('/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2/voice/17/17-ZZC-02.wav_folder/'+str(i)+'.wav')
+
+    x = mfcc(sig,rate,nfft=1103)
+
+endtime = time.time()
+dtime = endtime - starttime
+print(dtime/29)
