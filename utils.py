@@ -194,7 +194,7 @@ def getVoiceSample(root_path,label_path,version):
                 continue
             root_path_3=os.path.join(root_path_2,video)
             for wav in sorted(os.listdir(root_path_3),key=lambda x:int(x.split('.')[0])):
-                if wav.endswith("wav"):
+                if wav.endswith("npy"):
                     sample.append([os.path.join(root_path_3,wav),label])
         if len(sample)>0:
             samples.append(sample)

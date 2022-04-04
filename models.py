@@ -406,6 +406,6 @@ class VoiceCNN(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.input_layer(x)
         x = self.dropout(x)
-        x = self.relu(x)
-        x = self.layer_output(x)
-        return x
+        fea = self.relu(x)
+        x = self.layer_output(fea)
+        return x,fea

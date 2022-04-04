@@ -116,6 +116,8 @@ class FaceDataset(Dataset):
     def load_npy(self,file_path):
         npy=np.load(file_path)
         npy=npyStandard(npy)
+        npy=torch.from_numpy(npy)
+        npy=npy.to(torch.float32)
         return npy
 
     def __len__(self):
@@ -142,6 +144,7 @@ class FaceDataset(Dataset):
                     npys.append(self.load_npy(it[1]))
                     label=it[-1]
                 imgs=torch.stack(imgs)
+                npys=torch.stack(npys)
                 sample = {'x1': imgs,'x2':npys,'y':label}
             else:
                 imgss=[]
@@ -154,39 +157,40 @@ class FaceDataset(Dataset):
                         npys.append(self.load_npy(it[1]))
                         label=it[-1]
                     imgs=torch.stack(imgs)
+                    npys=torch.stack(npys)
                     imgss.append(imgs)
                     npyss.append(npys)
                 sample = {'x1': imgss,'x2':npyss,'y':label}
         return sample
 
 class VoiceDataset(Dataset):
-    def __init__(self,train,train_rio,paths,is_person,tcn_num=1):
+    def __init__(self,train,train_rio,paths,is_person,tcn_num=1,person_test=0):
         self.train=train
         self.is_person=is_person
         self.items=[]
+        self.person_test=person_test
 
         for path in paths:
-            self.items+=getFaceSample(path[0],path[1],path[2])
+            self.items+=getVoiceSample(path[0],path[1],path[2])
 
         self.train_rio=int(len(self.items)*train_rio)
 
         if train:
             self.items=self.items[:self.train_rio]
-            self.transform = Compose([Resize([52,52]),RandomCrop([48,48]),RandomHorizontalFlip(),RandomVerticalFlip(),ToTensor()])
+            
         else:
             self.items=self.items[self.train_rio:]
-            self.transform = Compose([Resize([48,48]),ToTensor()])
+            
 
         items=[]
+        itemss=[]
         
         if not is_person:
             for person in self.items:
-                for img in person:
-                    items.append(img)
+                for wav in person:
+                    items.append(wav)
             self.items=items
         else:
-            self.transform = Compose([Resize([48,48]),ToTensor()])
-            
             for person in self.items:
                 i=0
                 LEN=len(person)
@@ -206,25 +210,20 @@ class VoiceDataset(Dataset):
 
                     i+=tcn_num
 
-        self.items=items
-        print(len(self.items))
+                if person_test:
+                    itemss.append(items)
+                    items=[]
 
-    def load_img(self,file_path,hf=0.0,vf=0.0):
-        img = Image.open(file_path).convert('L')
-        img=np.array(img)
-        img = img[:, :, np.newaxis]
-        img = np.concatenate((img, img, img), axis=2)
-        img = Image.fromarray(img)
-        img=self.transform(img)
-        if hf>0.5:
-            img=tf.hflip(img)
-        if vf>0.5:
-            img=tf.vflip(img)
-        return img
+        self.items=items
+        if person_test:
+            self.items=itemss
+        print(len(self.items))
 
     def load_npy(self,file_path):
         npy=np.load(file_path)
-        npy=npyStandard(npy)
+        npy=torch.from_numpy(npy)
+        npy=torch.unsqueeze(npy, 0)
+        npy=npy.to(torch.float32)
         return npy
 
     def __len__(self):
@@ -232,23 +231,17 @@ class VoiceDataset(Dataset):
 
     def __getitem__(self, idr):
         item=self.items[idr]
-        imgs=[]
         npys=[]
         label=0.0
         sample = None
         if not self.is_person:
-            img=self.load_img(item[0])
-            npy=self.load_npy(item[1])
-            sample = {'x1': img,'x2':npy,'y':item[-1]}
+            npy=self.load_npy(item[0])
+            sample = {'x':npy,'y':item[-1]}
         else:
-            hf,vf=0.0,0.0
-            if self.train:
-                hf=random.random()
-                vf=random.random()
             for it in item:
-                imgs.append(self.load_img(it[0],hf,vf))
-                npys.append(self.load_npy(it[1]))
+                npys.append(self.load_npy(it[0]))
                 label=it[-1]
-            imgs=torch.stack(imgs)
-            sample = {'x1': imgs,'x2':npys,'y':label}
+            
+            npys=torch.stack(npys)
+            sample = {'x':npys,'y':label}
         return sample

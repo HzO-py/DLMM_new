@@ -149,7 +149,7 @@ def vggTrain():
 
             
             x = net2(x)
-            outputs = net3(x)
+            outputs,_ = net3(x)
             
             loss = criterion(outputs, y)
           
@@ -184,7 +184,7 @@ def vggTrain():
 
                 
                 x = net2(x)
-                outputs = net3(x)
+                outputs,_ = net3(x)
                 
                 loss = criterion(outputs, y)
                 cnt+=1
@@ -226,7 +226,7 @@ def tcnTrain():
     net4=TemporalConvNet(TCN_NUM,TCN_HIDDEN_NUM)
     net4 = net4.to(device)
 
-    net5 = Regressor(64,32)
+    net5 = Regressor(HIDDEN_NUM,HIDDEN_NUM//2)
     net5 = net5.to(device)
 
 
@@ -338,5 +338,5 @@ def tcnTrain():
             torch.save(state, os.path.join(LOGS_ROOT,MODEL_NAME))            
     print(testloss_best)
 
-test()
+tcnTrain()
     

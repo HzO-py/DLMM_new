@@ -23,7 +23,7 @@ import pdb
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser(description='PyTorch Biovid PreTraining')
-parser.add_argument('--yamlFile', default='config/face_config.yaml', help='yaml file') 
+parser.add_argument('--yamlFile', default='config/voice_config.yaml', help='yaml file') 
 args = parser.parse_args()
 
 cfg=getCfg(args.yamlFile)
@@ -216,30 +216,19 @@ def vggTrain():
     print(testloss_best)
 
 def tcnTrain():
-    net2 = VGG("VGG19")
-    checkpoint = torch.load(os.path.join(LOGS_ROOT, "face.t7"))
-    net2.load_state_dict(checkpoint['net2'])
+    net2 = torch.load(os.path.join(MODEL_ROOT, 'CNN.ckpt'))
     net2 = net2.to(device)
-    for para in net2.named_parameters():
-        if para[0].startswith("features"):
-            if int(para[0].split(".")[1])<26:
-                para[1].requires_grad = False
-
-    net3 = Regressor(EXTRACT_NUM,HIDDEN_NUM)
-    net3.load_state_dict(checkpoint['net3'])
-    net3 = net3.to(device)
     
     net4=TemporalConvNet(TCN_NUM,TCN_HIDDEN_NUM)
     net4 = net4.to(device)
 
-    net5 = Regressor(64,32)
+    net5 = Regressor(EXTRACT_NUM,EXTRACT_NUM//2)
     net5 = net5.to(device)
-
 
     criterion = nn.MSELoss() 
     
-    train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,is_person=1,tcn_num=TCN_NUM)
-    test_dataset=FaceDataset(0,TRAIN_RIO,DATA_PATHS,is_person=1,tcn_num=TCN_NUM)
+    train_dataset=VoiceDataset(1,TRAIN_RIO,DATA_PATHS,is_person=1,tcn_num=TCN_NUM)
+    test_dataset=VoiceDataset(0,TRAIN_RIO,DATA_PATHS,is_person=1,tcn_num=TCN_NUM)
     train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE,shuffle=True)
     test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,shuffle=False)
     testloss_best=1e9
@@ -252,12 +241,11 @@ def tcnTrain():
         sum_loss = 0.0
 
         net2.eval()
-        net3.eval()
         net4.train()
         net5.train()
 
         for i,data in enumerate(train_dataloader):
-            xs,npys,y=data.values()
+            xs,y=data.values()
             y=y.to(torch.float32).unsqueeze(1)
             y = y + 0.05*torch.randn(y.size()[0],1)
             y=y.to(device)
@@ -267,8 +255,7 @@ def tcnTrain():
             for x in xs:
                 with torch.no_grad():
                     x = x.to(device)
-                    x = net2(x)
-                    _,fea = net3(x)
+                    _,fea = net2(x)
                     feas.append(fea)
 
             feas=torch.stack(feas)
@@ -299,20 +286,18 @@ def tcnTrain():
 
         cnt=0
         net2.eval()
-        net3.eval()
         net4.eval()
         net5.eval()
         with torch.no_grad():
             for i,data in enumerate(test_dataloader):
-                xs,npys,y=data.values()
+                xs,y=data.values()
                 y=y.to(torch.float32).unsqueeze(1)
                 y=y.to(device)
                 feas=[]
                 
                 for x in xs:
                     x = x.to(device)
-                    x = net2(x)
-                    _,fea = net3(x)
+                    _,fea = net2(x)
                     feas.append(fea)
 
                 feas=torch.stack(feas)
@@ -335,7 +320,6 @@ def tcnTrain():
             testloss_best = testloss
             state = {
             'net2': net2.state_dict(),
-            'net3': net3.state_dict(),
             'net4': net4.state_dict(),
             'net5': net5.state_dict(),
             'acc': testloss_best,

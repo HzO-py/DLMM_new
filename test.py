@@ -86,8 +86,8 @@ starttime = time.time()
 for i in range(29):
     (rate,sig) = wav.read('/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2/voice/17/17-ZZC-02.wav_folder/'+str(i)+'.wav')
 
-    x = mfcc(sig,rate,nfft=1103)
+    x = mfcc(sig,rate)
 
 endtime = time.time()
 dtime = endtime - starttime
-print(dtime/29)
+print(dtime)

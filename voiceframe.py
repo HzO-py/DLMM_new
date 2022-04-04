@@ -5,6 +5,9 @@ import os
 import numpy as np
 import moviepy.editor as mp
 from tqdm import tqdm
+import scipy.io.wavfile as wav
+from python_speech_features import mfcc
+
 def keepVoice(path,fileName):
     index = 0
     file_rate, file = wavfile.read(os.path.join(path, fileName))
@@ -42,15 +45,28 @@ def keepVoice(path,fileName):
             index += 1
             write(newName, file_rate, newFile)
         
-            
+
+def wav2npy(path,fileName):
+    (rate,sig) = wav.read(os.path.join(path,fileName))
+    npy = mfcc(sig,rate,nfft=1103)
+    npy = npy[0:199, :]
+    save_path=os.path.join(path,fileName.split('.')[0]+'.npy')
+    np.save(save_path,npy)
+
+
 def listwav(paths):
     for path in paths:
         dir_path=os.path.join(path,'voice')
         for i in sorted(os.listdir(dir_path),key=lambda x:int(x.split('.')[0])):
             dir_path_2=os.path.join(dir_path,i)
             for j in sorted(os.listdir(dir_path_2)):
-                if j.endswith('wav'):
-                    keepVoice(dir_path_2,j)
+                if j.endswith('_folder'):
+                    dir_path_3=os.path.join(dir_path_2,j)
+                    for k in sorted(os.listdir(dir_path_3),key=lambda x:int(x.split('.')[0])):
+                        if k.endswith('wav'):
+                            wav2npy(dir_path_3,k)
+                    print(j)
+                            
                 
 def mp42wav(paths):
     for path in paths:
