@@ -43,10 +43,11 @@ class BioDataset(Dataset):
         
    
 class FaceDataset(Dataset):
-    def __init__(self,train,train_rio,paths,is_person,tcn_num=1):
+    def __init__(self,train,train_rio,paths,is_person,tcn_num=1,person_test=0):
         self.train=train
         self.is_person=is_person
         self.items=[]
+        self.person_test=person_test
 
         for path in paths:
             self.items+=getFaceSample(path[0],path[1],path[2])
@@ -61,6 +62,7 @@ class FaceDataset(Dataset):
             self.transform = Compose([Resize([48,48]),ToTensor()])
 
         items=[]
+        itemss=[]
         
         if not is_person:
             for person in self.items:
@@ -89,7 +91,13 @@ class FaceDataset(Dataset):
 
                     i+=tcn_num
 
+                if person_test:
+                    itemss.append(items)
+                    items=[]
+
         self.items=items
+        if person_test:
+            self.items=itemss
         print(len(self.items))
 
     def load_img(self,file_path,hf=0.0,vf=0.0):
@@ -124,16 +132,31 @@ class FaceDataset(Dataset):
             npy=self.load_npy(item[1])
             sample = {'x1': img,'x2':npy,'y':item[-1]}
         else:
-            hf,vf=0.0,0.0
-            if self.train:
-                hf=random.random()
-                vf=random.random()
-            for it in item:
-                imgs.append(self.load_img(it[0],hf,vf))
-                npys.append(self.load_npy(it[1]))
-                label=it[-1]
-            imgs=torch.stack(imgs)
-            sample = {'x1': imgs,'x2':npys,'y':label}
+            if not self.person_test:
+                hf,vf=0.0,0.0
+                if self.train:
+                    hf=random.random()
+                    vf=random.random()
+                for it in item:
+                    imgs.append(self.load_img(it[0],hf,vf))
+                    npys.append(self.load_npy(it[1]))
+                    label=it[-1]
+                imgs=torch.stack(imgs)
+                sample = {'x1': imgs,'x2':npys,'y':label}
+            else:
+                imgss=[]
+                npyss=[]
+                for ite in item:
+                    imgs=[]
+                    npys=[]
+                    for it in ite:
+                        imgs.append(self.load_img(it[0]))
+                        npys.append(self.load_npy(it[1]))
+                        label=it[-1]
+                    imgs=torch.stack(imgs)
+                    imgss.append(imgs)
+                    npyss.append(npys)
+                sample = {'x1': imgss,'x2':npyss,'y':label}
         return sample
 
 class VoiceDataset(Dataset):
