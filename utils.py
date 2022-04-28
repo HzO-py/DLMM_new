@@ -184,7 +184,7 @@ def getVoiceSample(root_path,label_path,version):
         sample=[]
         root_path_2=os.path.join(root_path,person)
         for video in os.listdir(root_path_2):
-            if not video.endswith('_folder'):
+            if not video.endswith('_fftnpy'):
                 continue
             video_id=-1
             if version==2:

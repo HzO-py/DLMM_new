@@ -7,6 +7,7 @@ import moviepy.editor as mp
 from tqdm import tqdm
 import scipy.io.wavfile as wav
 from python_speech_features import mfcc
+import librosa
 
 def keepVoice(path,fileName):
     index = 0
@@ -46,13 +47,17 @@ def keepVoice(path,fileName):
             write(newName, file_rate, newFile)
         
 
-def wav2npy(path,fileName):
-    (rate,sig) = wav.read(os.path.join(path,fileName))
-    npy = mfcc(sig,rate,nfft=1103)
-    npy = npy[0:199, :]
-    save_path=os.path.join(path,fileName.split('.')[0]+'.npy')
-    np.save(save_path,npy)
+def wav2npy(path):
+    save_path=path+'_fftnpy'
+    print(save_path)
 
+    y, sr = librosa.load(path, sr=None)
+    for i in range(len(y)//sr):
+        y_sub=y[i*sr:(i+1)*sr]
+        melspec = librosa.feature.melspectrogram(y_sub, sr, n_fft=2048, hop_length=512, n_mels=128)
+        logmelspec = librosa.power_to_db(melspec)
+        np.save(os.path.join(save_path,str(i)+'.npy'),logmelspec)
+    
 
 def listwav(paths):
     for path in paths:
@@ -60,12 +65,12 @@ def listwav(paths):
         for i in sorted(os.listdir(dir_path),key=lambda x:int(x.split('.')[0])):
             dir_path_2=os.path.join(dir_path,i)
             for j in sorted(os.listdir(dir_path_2)):
-                if j.endswith('_folder'):
-                    dir_path_3=os.path.join(dir_path_2,j)
-                    for k in sorted(os.listdir(dir_path_3),key=lambda x:int(x.split('.')[0])):
-                        if k.endswith('wav'):
-                            wav2npy(dir_path_3,k)
-                    print(j)
+                if j.endswith('.wav'):
+                    dir_path_3=os.path.join(dir_path_2,j+'_fftnpy')
+                    if not os.path.exists(dir_path_3):
+                        os.mkdir(dir_path_3)
+                        wav2npy(os.path.join(dir_path_2,j))
+
                             
                 
 def mp42wav(paths):
@@ -88,12 +93,16 @@ def mp42wav(paths):
                 
 
 listwav([
-  "/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2",
-  "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1",
-  "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2",
-  "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3",
-  "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4",
-  "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3",
-  "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4",
-  "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5"
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4",
   ])

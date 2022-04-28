@@ -2,6 +2,7 @@ from torch.nn.utils import weight_norm
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+import torch
 
 
 cfg = {
@@ -409,3 +410,31 @@ class VoiceCNN(nn.Module):
         fea = self.relu(x)
         x = self.layer_output(fea)
         return x,fea
+
+class BILSTM(nn.Module):
+    def __init__(self,channel_num,hidden_size,layer_num,device):
+        super(BILSTM, self).__init__()
+
+        self.n_layers=layer_num
+        self.n_class=channel_num
+        self.n_hidden=hidden_size
+        self.device=device
+        
+        self.lstm = nn.LSTM(input_size=self.n_class, hidden_size=self.n_hidden, bidirectional=True,num_layers=self.n_layers)
+        self.W = nn.Parameter(torch.randn([2*self.n_hidden, self.n_class]).type(torch.float32))
+        
+        self.b = nn.Parameter(torch.randn([self.n_class]).type(torch.float32))
+
+    def forward(self, x):
+        batch_size = len(x)
+        x = x.transpose(0, 1).contiguous()
+
+        
+        init_hidden_state = Variable(torch.zeros(self.n_layers*2, batch_size, self.n_hidden)).to(self.device)
+        init_cell_state = Variable(torch.zeros(self.n_layers*2, batch_size, self.n_hidden)).to(self.device)
+
+        outputs, (_, _) = self.lstm(x, (init_hidden_state, init_cell_state))
+        outputs = outputs[-1]
+        final_output = torch.mm(outputs, self.W) + self.b
+
+        return final_output
