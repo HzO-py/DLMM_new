@@ -68,7 +68,7 @@ class Classifier(nn.Module):# 最终的分类器，用于输出预测概率
         x = self.fc1(x)
         x = F.selu(x)
         out = self.fc2(x)
-        return out 
+        return out,x 
 
 class Regressor(nn.Module):# 最终的分类器，用于输出预测概率
 

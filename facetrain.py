@@ -22,7 +22,7 @@ from loader import BioDataset,FaceDataset,VoiceDataset,FVDataset
 import pdb
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+ 
 parser = argparse.ArgumentParser(description='PyTorch Biovid PreTraining')
 parser.add_argument('--yamlFile', default='config/face_config.yaml', help='yaml file') 
 args = parser.parse_args()
@@ -102,7 +102,9 @@ def test():
         net3.eval()
         net4.eval()
         net5.eval()
+        result=[]
         with torch.no_grad():
+            
             for i,data in enumerate(test_dataloader):
                 xss,npys,y=data.values()
                 y=float(y)
@@ -131,8 +133,11 @@ def test():
                 cnt+=1
                 #print(y,loss)
                 sum_loss+=abs(loss-y)
+                
+                result.append([loss,y])
                     # 每训练1个batch打印一次loss和准确率
-                    
+        result=sorted(result,key=lambda x:abs(x[0]-x[1]))           
+        print(result)
         print('  [Test] Loss: %.03f'
                   % (sum_loss / cnt))
 
@@ -424,11 +429,15 @@ def tcnTrain():
 
     net4 = net4.to(device)
 
-    net5 = Regressor(HIDDEN_NUM,HIDDEN_NUM)
+    net5=Classifier(HIDDEN_NUM,HIDDEN_NUM,CLASS_NUM)
     net5 = net5.to(device)
 
+    net7 = Regressor(HIDDEN_NUM,HIDDEN_NUM).to(device)
+    net8 = Regressor(HIDDEN_NUM,HIDDEN_NUM).to(device)
+    net9 = Regressor(HIDDEN_NUM,HIDDEN_NUM).to(device)
 
     criterion = nn.MSELoss() 
+    criterion_cls = nn.CrossEntropyLoss() 
     
     if not FACE_OR_VOICE:
         train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,is_person=1,tcn_num=TCN_NUM)
@@ -443,24 +452,45 @@ def tcnTrain():
 
     for epoch in range(pre_epoch, EPOCH):
 
-        optimizer = optim.Adam(itertools.chain(net4.parameters(),net5.parameters()), lr=LR,weight_decay=WEIGHT_DELAY)
+        optimizer = optim.Adam(itertools.chain(net4.parameters(),net5.parameters(),net7.parameters(),net8.parameters(),net9.parameters()), lr=LR,weight_decay=WEIGHT_DELAY)
         print('\nEpoch: %d' % (epoch + 1))
         
         sum_loss = 0.0
+        sum_loss2 = 0.0
 
         net2.eval()
         net3.eval()
         net4.train()
         net5.train()
+        net7.train()
+        net8.train()
+        net9.train()
 
         for i,data in enumerate(train_dataloader):
             xs,npys,y=data.values()
             y=y.to(torch.float32).unsqueeze(1)
+            labels=[]
+            for j in range(len(y)):
+                y_sub=float(y[j])
+                if y_sub<=0.2:
+                    label=0
+                    y[j]=y[j]/0.2-0.5
+                elif y_sub>=0.8:
+                    label=2
+                    y[j]=(y[j]-0.8)/0.2-0.5
+                else:
+                    label=1
+                    y[j]=(y[j]-0.2)/0.6-0.5
+                labels.append(label)
+            labels=torch.tensor(labels)
+            labels=labels.to(device)
+
             y = y + 0.05*torch.randn(y.size()[0],1)
             y=y.to(device)
             feas=[]
             
             optimizer.zero_grad()
+
             for x in xs:
                 with torch.no_grad():
                     x = x.to(device)
@@ -471,17 +501,33 @@ def tcnTrain():
                     feas.append(fea)
 
             feas=torch.stack(feas)
-            
             feas = net4(feas).squeeze(1)
-            outputs,_=net5(feas)
+            outputs_cls,_=net5(feas)
+            _,predicted = torch.max(outputs_cls.data, -1)
+
             
-            loss = criterion(outputs, y)
+            outputs=[]
+            for j in range(len(predicted)):
+                predicted_sub=int(predicted[j])
+                if predicted_sub==0:
+                    output,_=net7(feas[j].unsqueeze(0))
+                elif predicted_sub==1:
+                    output,_=net8(feas[j].unsqueeze(0))
+                else:
+                    output,_=net9(feas[j].unsqueeze(0))
+                outputs.append(output.squeeze(0))
+            outputs=torch.stack(outputs)
+            
+            loss2 = criterion(outputs, y)
+            loss1=criterion_cls(outputs_cls, labels)
+            loss=loss1+loss2
           
             loss.backward()
             optimizer.step()
 
             # 每训练1个batch打印一次loss和准确率
             sum_loss += loss.item()
+            sum_loss2 += loss2.item()
             #_, predicted = outputs.data
             #total += y.size(0)
             #correct += predicted.eq(y.data).cpu().sum()
@@ -489,23 +535,44 @@ def tcnTrain():
             #sys.stdout.flush()
             if i>0:
                 sys.stdout.write('\r')
-            sys.stdout.write('[epoch:%d, iter:%d] Loss: %.03f'
-                  % (epoch + 1, (i + 1 ), sum_loss / (i + 1)))
+            sys.stdout.write('[epoch:%d, iter:%d] Loss: %.09f Loss2: %.09f'
+                  % (epoch + 1, (i + 1 ), sum_loss / (i + 1),sum_loss2 / (i + 1)))
             
         
             # print('  loss:',fc_loss_all/(i+1),' acc:',acc/((i+1)*BATCH_SIZE))
         ####################################################################################
         sum_loss = 0.0
+        sum_loss2 = 0.0
 
         cnt=0
         net2.eval()
         net3.eval()
         net4.eval()
         net5.eval()
+        net7.eval()
+        net8.eval()
+        net9.eval()
         with torch.no_grad():
             for i,data in enumerate(test_dataloader):
                 xs,npys,y=data.values()
                 y=y.to(torch.float32).unsqueeze(1)
+                
+                labels=[]
+                for j in range(len(y)):
+                    y_sub=float(y[j])
+                    if y_sub<=0.2:
+                        label=0
+                        y[j]=y[j]/0.2-0.5
+                    elif y_sub>=0.8:
+                        label=2
+                        y[j]=(y[j]-0.8)/0.2-0.5
+                    else:
+                        label=1
+                        y[j]=(y[j]-0.2)/0.6-0.5
+                    labels.append(label)
+                labels=torch.tensor(labels)
+                labels=labels.to(device)
+
                 y=y.to(device)
                 feas=[]
                 
@@ -519,20 +586,37 @@ def tcnTrain():
 
                 feas=torch.stack(feas)
                 feas = net4(feas).squeeze(1)
-                outputs,_=net5(feas)
+                outputs_cls,_=net5(feas)
+                _,predicted = torch.max(outputs_cls.data, -1)
+
+
+                outputs=[]
+                for j in range(len(predicted)):
+                    predicted_sub=int(predicted[j])
+                    if predicted_sub==0:
+                        output,_=net7(feas[j].unsqueeze(0))
+                    elif predicted_sub==1:
+                        output,_=net8(feas[j].unsqueeze(0))
+                    else:
+                        output,_=net9(feas[j].unsqueeze(0))
+                    outputs.append(output.squeeze(0))
+                outputs=torch.stack(outputs)
                 
-                loss = criterion(outputs, y)
+                loss2 = criterion(outputs, y)
+                loss1=criterion_cls(outputs_cls, labels)
+                loss=loss1+loss2
                 cnt+=1
                 # 每训练1个batch打印一次loss和准确率
                 sum_loss += loss.item()
+                sum_loss2 += loss2.item()
                 #predicted = outputs.data
                 # total += y.size(0)
                 # correct += predicted.eq(y.data).cpu().sum()
 
-        print('  [Test] Loss: %.03f'
-                  % (sum_loss / cnt))
+        print('  [Test] Loss: %.09f Loss2: %.09f'
+                  % (sum_loss / cnt,sum_loss2/cnt))
 
-        testloss = sum_loss / cnt
+        testloss = sum_loss2/cnt
         if testloss < testloss_best:
             testloss_best = testloss
             state = {
@@ -540,7 +624,11 @@ def tcnTrain():
             'net3': net3.state_dict(),
             'net4': net4.state_dict(),
             'net5': net5.state_dict(),
+            'net7': net7.state_dict(),
+            'net8': net8.state_dict(),
+            'net9': net9.state_dict(),
             'acc': testloss_best,
+            'loss':sum_loss / cnt,
             'epoch': epoch,
         }
             torch.save(state, os.path.join(LOGS_ROOT,MODEL_NAME))            
@@ -728,4 +816,4 @@ def fvTrain():
             torch.save(state, os.path.join(LOGS_ROOT,MODEL_NAME))            
     print(testloss_best)
 
-fvtest()
+tcnTrain()

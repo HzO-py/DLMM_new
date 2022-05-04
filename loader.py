@@ -115,10 +115,11 @@ class FaceDataset(Dataset):
         return img
 
     def load_npy(self,file_path):
-        npy=np.load(file_path)
-        npy=npyStandard(npy)
-        npy=torch.from_numpy(npy)
-        npy=npy.to(torch.float32)
+        # npy=np.load(file_path)
+        # npy=npyStandard(npy)
+        # npy=torch.from_numpy(npy)
+        # npy=npy.to(torch.float32)
+        npy=torch.tensor([0], dtype=torch.int)
         return npy
 
     def __len__(self):

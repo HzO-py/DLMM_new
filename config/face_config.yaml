@@ -1,19 +1,19 @@
 DATA_ROOT: '/hdd/lzq/PartA/biosignals_raw'
 MODEL_ROOT: '/hdd/sdd/lzq/DLMM_new/model'
 LOGS_ROOT: '/hdd/sdd/lzq/DLMM_new/model/logs'
-MODEL_NAME: 'v4_voice_res_tcn.t7'
+MODEL_NAME: 'v5_face_rgb_res_tcn.t7'
 GPUID: "0"
 
-EPOCH: 50
+EPOCH: 200
 BATCH_SIZE: 512
 TCN_BATCH_SIZE: 64
 
-FACE_OR_VOICE: 1
+FACE_OR_VOICE: 0
 
 VGG_OR_RESNET: 1
 EXTRACT_NUM: 512
 HIDDEN_NUM: 64
-CLASS_NUM: 2
+CLASS_NUM: 3
 
 TCN_OR_LSTM: 0
 TCN_NUM: 32
