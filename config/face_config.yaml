@@ -1,12 +1,14 @@
 DATA_ROOT: '/hdd/lzq/PartA/biosignals_raw'
 MODEL_ROOT: '/hdd/sdd/lzq/DLMM_new/model'
 LOGS_ROOT: '/hdd/sdd/lzq/DLMM_new/model/logs'
-MODEL_NAME: 'v5_face_rgb_res_tcn.t7'
-GPUID: "0"
+MODEL_NAME: 'demo_face_tcn.t7'
+CHECKPOINT_NAME: ['v4_face_rgb_res.t7','v4_voice_cry_tcn.t7']
+GPUID: "1"
 
-EPOCH: 200
-BATCH_SIZE: 512
-TCN_BATCH_SIZE: 64
+EPOCH: 50
+SUB_EPOCH: 10
+BATCH_SIZE: 1024
+TCN_BATCH_SIZE: 128
 
 FACE_OR_VOICE: 0
 
@@ -32,7 +34,8 @@ DATA_PATHS: [
   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2]
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  #["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2]
   ]
 IS_POINT: True
 

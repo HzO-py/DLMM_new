@@ -82,12 +82,13 @@ import scipy.io.wavfile as wav
 from python_speech_features import mfcc
 import time
 
-starttime = time.time()
-for i in range(29):
-    (rate,sig) = wav.read('/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2/voice/17/17-ZZC-02.wav_folder/'+str(i)+'.wav')
+# starttime = time.time()
+# for i in range(29):
+#     (rate,sig) = wav.read('/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2/voice/17/17-ZZC-02.wav_folder/'+str(i)+'.wav')
 
-    x = mfcc(sig,rate)
+#     x = mfcc(sig,rate)
 
-endtime = time.time()
-dtime = endtime - starttime
-print(dtime)
+# endtime = time.time()
+# dtime = endtime - starttime
+# print(dtime)
+print(0.8//0.2)

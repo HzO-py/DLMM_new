@@ -99,6 +99,20 @@ class FaceDataset(Dataset):
                     itemss.append(items)
                     items=[]
 
+
+        # if self.train:
+        #     classnum=[0]*5
+        #     classdiv=[[]]*5
+        #     for item in items:
+        #         whichone=int(min(4,item[0][-1]//0.2))
+        #         classnum[whichone]+=1
+        #         classdiv[whichone].append(item)
+
+        #     MAXNNUM=max(classnum)
+        #     for i in range(5):
+        #         for _ in range(MAXNNUM-classnum[i]):
+        #             items.append(classdiv[i][random.randint(0,classnum[i]-1)])
+
         self.items=items
         if person_test:
             self.items=itemss

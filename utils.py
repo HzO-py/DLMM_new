@@ -12,6 +12,8 @@ modal2num={"gsr":3,"ecg":1}
 
 abc2num={"A":0.0,"B":0.2,"C":0.4,"D":0.6,"E":0.8,"F":1.0}
 
+doctorVSnurse=[]
+
 def spectralCentroid(X):
     """Computes spectral centroid of frame (given abs(FFT))"""
     L = X.shape[0]
@@ -104,11 +106,15 @@ def getLable(label_path,person,video_id):
                         score+=float(int(line[2])/10)
                     if line[3]!="":
                         flag+=1
+                        lianpu=0.0
                         if line[3] in abc2num.keys():
-                            score+=float(abc2num[line[3]])
+                            lianpu=float(abc2num[line[3]])
                         else:
-                            score+=float((int(line[3])-1)*0.25)
+                            lianpu=float((int(line[3])-1)*0.25)
+                        score+=lianpu
                     if flag>0:
+                        if flag==2:
+                            doctorVSnurse.append(abs(float(int(line[2])/10)-lianpu))
                         return True,score/flag
                 elif video_id==2 or video_id==4:
                     base=1
@@ -123,7 +129,11 @@ def getLable(label_path,person,video_id):
                         flag+=1
                         score+=float(int(line[base+1])/10)
                     if flag>0:
+                        #score2=score/flag
+                        if flag==2:
+                            doctorVSnurse.append(abs(float(int(line[base])/10)-float(int(line[base+1])/10)))
                         return True,score/flag
+                    
                     score=0.0
                     flag=0
                     if line[base+2]!="":
@@ -131,11 +141,15 @@ def getLable(label_path,person,video_id):
                         score+=float(int(line[base+2])/10)
                     if line[base+3]!="":
                         flag+=1
+                        lianpu=0.0
                         if line[base+3] in abc2num.keys():
-                            score+=float(abc2num[line[base+3]])
+                            lianpu=float(abc2num[line[base+3]])
                         else:
-                            score+=float((int(line[base+3])-1)*0.2)
+                            lianpu=float((int(line[base+3])-1)*0.2)
+                        score+=lianpu
                     if flag>0:
+                        if flag==2:
+                            doctorVSnurse.append(abs(float(int(line[base+2])/10)-lianpu))
                         return True,score/flag
     return False,False
 
@@ -261,3 +275,22 @@ def npyStandard(npy):
     npy=npy[17:]
     
     return npy
+
+# paths=[
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2/label.csv",1],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1/label.csv",1],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2/label.csv",1],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3/label.csv",1],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4/label.csv",2],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/label.csv",2],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/label.csv",2],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/label.csv",2],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+#   ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+#   #["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2]
+#   ]
+# for path in paths:
+#     getFaceSample(os.path.join(path[0],"face"),path[1],path[2])
+# print(sum(doctorVSnurse)/len(doctorVSnurse))
