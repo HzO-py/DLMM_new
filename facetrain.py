@@ -66,11 +66,21 @@ for i in range(len(DATA_PATHS)):
     modal='face'
     if not FACE_OR_VOICE:
         modal='face'
-    else:
+    elif FACE_OR_VOICE==1:
         modal='voice'
+    else:
+        modal='bio'
     DATA_PATHS[i][0]=os.path.join(DATA_PATHS[i][0],modal)
 
-
+def collate_fn(batch_datas):
+    x_data = []
+    labels = []
+    for data in batch_datas:
+        x_data.append(torch.tensor(data["x"]))
+        labels.append(data["y"])
+    labels = torch.tensor(labels).unsqueeze(1)
+    
+    return x_data,labels
 
 def tcnTest():
     checkpoint = torch.load(os.path.join(LOGS_ROOT, MODEL_NAME))
@@ -503,7 +513,9 @@ def tcnTrain():
 
             feas=torch.stack(feas)
             
+            print(feas.size())
             feas = net4(feas).squeeze(1)
+            print(feas.size())
             outputs,_=net5(feas)
             
             loss = criterion(outputs, y)
@@ -1303,6 +1315,81 @@ def fvTest_detail():
         print('  [Person Test] Loss_fv_sum: %.03f'
                   % (sum_loss / cnt))
 
+def bioTrain():
+    train_dataset=BioDataset(1,TRAIN_RIO,DATA_PATHS,tcn_num=TCN_NUM)
+    test_dataset=BioDataset(0,TRAIN_RIO,DATA_PATHS,tcn_num=TCN_NUM)
+    train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE,shuffle=True,collate_fn= collate_fn)
+    test_dataloader = DataLoader(test_dataset, batch_size=BATCH_SIZE,shuffle=False,collate_fn= collate_fn)
+    testloss_best=1e9
+    criterion = nn.L1Loss()
+    net3=TemporalConvNet(TCN_NUM,TCN_HIDDEN_NUM)
+    net3=net3.cuda()
+    optimizer = optim.Adam(chain(net3.parameters()), lr=LR,weight_decay=WEIGHT_DELAY)
+    for epoch in range(0, EPOCH):
+        sum_loss=0
+        net3.train()
+        for i,data in enumerate(train_dataloader):
+            x,y=data
+            print(len(x),x[0].size())
+            y = y.to(torch.float32)
+            y = y + 0.1*torch.randn(y.size()[0],1)
+            y = y.cuda().view(-1)
+            optimizer.zero_grad()
+            outputs = []
+            for imgs in x:
+                imgs = imgs.cuda().unsqueeze(0).to(torch.float32)
+                
+                output = net3(imgs)
+                print(output.size())
+                outputs.append(output)
+            
+            outputs = torch.stack(outputs).view(-1)
+            
+            print(outputs.size())
+            loss = criterion(outputs, y)
+            loss.backward()
+            optimizer.step()
+
+            sum_loss += loss.item()
+
+            if i>0:
+                sys.stdout.write('\r')
+            sys.stdout.write('[epoch:%d, iter:%d] Loss: %.03f'
+                  % (epoch + 1, (i + 1 ), sum_loss / (i + 1)))
+
+        
+        sum_loss=0
+        cnt=0
+        net3.eval()
+        with torch.no_grad():
+            for i,data in enumerate(train_dataloader):
+                x,y=data
+                y = y.to(torch.float32)
+                y = y.cuda().view(-1)
+                outputs = []
+                for imgs in x:
+                    imgs = imgs.cuda().view(1,1,-1).to(torch.float32)
+                    output = net3(imgs)
+                    outputs.append(output)
+                outputs = torch.stack(outputs, dim=-1).view(-1)
+                print(outputs.size())
+                loss = criterion(outputs, y)
+                cnt+=1
+                sum_loss += loss.item()
+        print('  [Test] Loss: %.03f'
+                % (sum_loss / cnt))
+
+        testloss = sum_loss / cnt
+        if testloss < testloss_best:
+            testloss_best = testloss
+            state = {
+            'net3': net3.state_dict(),
+            'acc': testloss_best,
+            'epoch': epoch,
+        }
+        torch.save(state, os.path.join(LOGS_ROOT,MODEL_NAME))            
+    print(testloss_best)
+
 def drawplt(y1,y2):
     x=range(0,EPOCH)
     plt.plot(x, y1,color='green', label='train')    
@@ -1312,4 +1399,4 @@ def drawplt(y1,y2):
     plt.ylabel('MSE')
     plt.savefig(os.path.join(LOGS_ROOT,'loss.png'))
 
-tcnTrain()
+bioTrain()

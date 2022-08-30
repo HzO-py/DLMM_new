@@ -54,6 +54,7 @@ def wav2npy(path):
     y, sr = librosa.load(path, sr=None)
     for i in range(len(y)//sr):
         y_sub=y[i*sr:(i+1)*sr]
+        print(sr)
         melspec = librosa.feature.melspectrogram(y_sub, sr, n_fft=2048, hop_length=512, n_mels=128)
         logmelspec = librosa.power_to_db(melspec)
         np.save(os.path.join(save_path,str(i)+'.npy'),logmelspec)
@@ -92,21 +93,22 @@ def mp42wav(paths):
                 my_clip.audio.write_audiofile(save_path_3)
                 
 
-mp42wav([
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3",
-    # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4",
-    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5",
-  ])
+# mp42wav([
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3",
+#     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4",
+#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain7",
+#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain8",
+#   ])
 listwav([
     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2",
     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1",
@@ -120,5 +122,6 @@ listwav([
     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2",
     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3",
     # "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4",
-    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain7",
+    "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain8",
   ])

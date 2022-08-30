@@ -3,7 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torch
-
+import torchvision
+from torch.nn.modules.loss import _Loss
+from torch import log2,exp
+import math
 
 cfg = {
     'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -18,12 +21,13 @@ class VGG(nn.Module):
         super(VGG, self).__init__()
         self.features = self._make_layers(cfg[vgg_name])
         self.classifier = nn.Linear(512, 7)
+        #self.linear=nn.Linear(512,1)
 
     def forward(self, x):
         out = self.features(x)
         fea = out.view(out.size(0), -1)
         #out = F.dropout(fea, p=0.5, training=self.training)
-        #out = self.classifier(out)
+        #out = self.linear(out)
         return fea
 
     def _make_layers(self, cfg):
@@ -40,13 +44,52 @@ class VGG(nn.Module):
         layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
         return nn.Sequential(*layers)
 
+class VGG_regressor(nn.Module):
+    def __init__(self):
+        super(VGG_regressor, self).__init__()
+        self.VGG = VGG('VGG19')
+        self.linear=nn.Sequential(nn.Linear(512,256),nn.Linear(256,64),nn.Linear(64,1))
+
+    def forward(self, x):
+        fea = self.VGG(x)
+        print(fea.size())
+        out=self.linear(fea)
+        #out = F.dropout(fea, p=0.5, training=self.training)
+        #out = self.linear(out)
+        return out,fea,None
+
+class Resnet_regressor(nn.Module):
+    def __init__(self,modal,is_gradcam=False):
+        super(Resnet_regressor, self).__init__()
+        pretrained=True if modal=='face' else False
+        resnet=torchvision.models.resnet18(pretrained=pretrained)
+        if modal=='voice':
+            resnet.conv1= nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3,bias=False)
+        self.resnet=nn.Sequential(*list(resnet.children())[:-1])
+        self.linear=nn.Linear(512,1)
+        self.fea_grad=None
+        self.is_gradcam=is_gradcam
+
+    def gram_func(self,x):
+        self.fea_grad=x
+
+    def forward(self, x):
+        res=None
+        for i in range(len(self.resnet)):
+            x=self.resnet[i](x)
+            if i==len(self.resnet)-2 and self.is_gradcam:
+                x.register_hook(self.gram_func)
+                res=x.clone()
+        fea = x.view(x.size(0), -1)
+        out=self.linear(fea)
+        return out,fea,res
 
 class Prototype(nn.Module):#自定义类 继承nn.Module
 
     def __init__(self,inputNum,hiddenNum,outputNum):#初始化函数
         super(Prototype, self).__init__()#继承父类初始化函数
 
-        self.fc1 = nn.Linear(inputNum, hiddenNum, bias = False)
+        self.fc1 = nn.Linear(inputNum, hiddenNum)
         self.fc2 = nn.Linear(hiddenNum, outputNum, bias = False)
 
     def forward(self, x):
@@ -61,7 +104,7 @@ class Classifier(nn.Module):# 最终的分类器，用于输出预测概率
 
     def __init__(self,inputNum,hiddenNum,outputNum):#初始化函数
         super(Classifier, self).__init__()#继承父类初始化函数
-        self.fc1 = nn.Linear(inputNum, hiddenNum, bias = True)
+        self.fc1 = nn.Linear(inputNum, hiddenNum)
         self.fc2 = nn.Linear(hiddenNum, outputNum, bias = False)
 
     def forward(self, x):
@@ -74,17 +117,40 @@ class Regressor(nn.Module):# 最终的分类器，用于输出预测概率
 
     def __init__(self,inputNum,hiddenNum):#初始化函数
         super(Regressor, self).__init__()#继承父类初始化函数
-        self.fc1 = nn.Linear(inputNum, hiddenNum, bias = True)
-        self.fc2 = nn.Linear(hiddenNum, hiddenNum, bias = True)
-        self.fc3 = nn.Linear(hiddenNum, 1, bias = False)
+        self.fc1 = nn.Linear(inputNum, hiddenNum)
+        #self.fc2 = nn.Linear(hiddenNum, hiddenNum, bias = True)
+        self.fc3 = nn.Linear(hiddenNum, 1)
 
     def forward(self, x):
         x = self.fc1(x)
         x = F.selu(x)
+        # x = self.fc2(x)
+        # fea = F.selu(x)
+        out = self.fc3(x)
+        return out
+
+class Regressor_self(nn.Module):# 最终的分类器，用于输出预测概率
+    def __init__(self,inputNum,hiddenNum_1, hiddenNum_2,is_droup):#初始化函数
+        super(Regressor_self, self).__init__()#继承父类初始化函数
+        self.is_droup = is_droup
+        self.fc1 = nn.Linear(inputNum, hiddenNum_1, bias = True)
+        if is_droup is not None:
+            self.fc1_droupout = nn.Dropout(p=is_droup)
+        self.fc2 = nn.Linear(hiddenNum_1, hiddenNum_2, bias = True)
+        if is_droup is not None:
+            self.fc2_droupout = nn.Dropout(p=is_droup)
+        self.fc3 = nn.Linear(hiddenNum_2, 1, bias = False)
+    def forward(self, x):
+        x = self.fc1(x)
+        x = F.relu(x)
+        if self.is_droup:
+            x = self.fc1_droupout(x)
         x = self.fc2(x)
-        fea = F.selu(x)
-        out = self.fc3(fea)
-        return out,fea
+        x = F.relu(x)
+        if self.is_droup:
+            x = self.fc2_droupout(x)
+        out = self.fc3(x)
+        return out
 
 class ResidualBlock(nn.Module):
     def __init__(self, inchannel, outchannel, stride=1):
@@ -361,6 +427,18 @@ class TemporalConvNet(nn.Module):
         """
         return self.network(x)
 
+class TCN(nn.Module):
+    def __init__(self, input_size, output_size, num_channels, kernel_size=2, dropout=0.2):
+        super(TCN, self).__init__()
+        self.tcn = TemporalConvNet(input_size, num_channels, kernel_size=kernel_size, dropout=dropout)
+        self.linear = nn.Linear(num_channels[-1], output_size)
+
+    def forward(self, inputs):
+        """Inputs have to have dimension (N, C_in, L_in)"""
+        y1 = self.tcn(inputs)  # input should have dimension (N, C, L)
+        o = self.linear(y1[:, :, -1])
+        return o
+
 class VoiceCNN(nn.Module):
     def __init__(self,):
         super(VoiceCNN, self).__init__()
@@ -438,3 +516,203 @@ class BILSTM(nn.Module):
         final_output = torch.mm(outputs, self.W) + self.b
 
         return final_output
+
+class LSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers,is_bi = False,dropout=0) -> None:
+        super(LSTM, self).__init__()
+        self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers = num_layers, batch_first=True, bidirectional=is_bi, dropout=dropout)
+        #self.linear=nn.Linear(hidden_size,1)
+        # self.reset_hidden()
+    def forward(self, x, hidden=None):
+        # self.reset_hidden()
+        _,(h, c) = self.lstm(x, hidden)
+        #out=self.linear(h[-1])
+        return h[-1]
+
+class AU_extractor(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(AU_extractor, self).__init__()
+        self.linear_eye=nn.Sequential(nn.Linear(input_size[0],hidden_size),nn.SELU(),nn.Linear(hidden_size,output_size))
+        self.linear_mouth=nn.Sequential(nn.Linear(input_size[1],hidden_size),nn.SELU(),nn.Linear(hidden_size,output_size))
+    def forward(self, eye, mouth):
+        eye=self.linear_eye(eye)
+        mouth=self.linear_mouth(mouth)
+        out=torch.cat((eye,mouth),dim=-1)
+        return out
+
+def bmc_loss(pred, target, noise_var):
+    """Compute the Balanced MSE Loss (BMC) between `pred` and the ground truth `targets`.
+    Args:
+      pred: A float tensor of size [batch, 1].
+      target: A float tensor of size [batch, 1].
+      noise_var: A float number or tensor.
+    Returns:
+      loss: A float tensor. Balanced MSE Loss.
+    """
+    logits = - (pred - target.T).pow(2) / (2 * noise_var)   # logit size: [batch, batch]
+    loss = F.cross_entropy(logits, torch.arange(pred.shape[0]).cuda())     # contrastive-like loss
+    loss = loss * (2 * noise_var).detach()  # optional: restore the loss scale, 'detach' when noise is learnable 
+    return loss
+
+class BMCLoss(_Loss):
+    def __init__(self, init_noise_sigma):
+        super(BMCLoss, self).__init__()
+        self.noise_sigma = torch.nn.Parameter(torch.tensor(init_noise_sigma))
+        
+    def forward(self, pred, target):
+        noise_var = self.noise_sigma ** 2
+        return bmc_loss(pred, target, noise_var)
+
+class ClusterLoss(_Loss):
+    def __init__(self,extractor_num):
+        super(ClusterLoss, self).__init__()
+        self.pain_center = torch.nn.Parameter(torch.zeros([extractor_num],dtype=torch.float))
+        
+    def forward(self, pred, target):
+        loss=0.0
+        for i in range(target.size()[0]):
+            tar=float(target[i])
+            y=math.log2((tar+1))
+            pre=pred[i]
+            d=exp(-torch.norm((pre-self.pain_center))**2)
+            loss+=-y*log2(d)-(1-y)*log2(1-d)
+        loss/=target.size()[0]
+        #loss=loss.detach()
+        return loss
+
+RNNS = ['LSTM', 'GRU']
+
+class RNNEncoder(nn.Module):
+  def __init__(self, embedding_dim, hidden_dim, nlayers=1, dropout=0.,
+               bidirectional=True, rnn_type='GRU'):
+    super(RNNEncoder, self).__init__()
+    self.bidirectional = bidirectional
+    assert rnn_type in RNNS, 'Use one of the following: {}'.format(str(RNNS))
+    rnn_cell = getattr(nn, rnn_type) # fetch constructor from torch.nn, cleaner than if
+    self.rnn = rnn_cell(embedding_dim, hidden_dim, nlayers, 
+                        dropout=dropout, bidirectional=bidirectional)
+
+  def forward(self, input, hidden=None):
+    return self.rnn(input, hidden)
+
+class SelfAttention(nn.Module):
+  def __init__(self, query_dim):
+    super(SelfAttention, self).__init__()
+    self.scale = 1. / math.sqrt(query_dim)
+
+  def forward(self, query, keys, values):
+    # Query = [BxQ]
+    # Keys = [TxBxK]
+    # Values = [TxBxV]
+    # Outputs = a:[TxB], lin_comb:[BxV]
+
+    # Here we assume q_dim == k_dim (dot product attention)
+
+    query = query.unsqueeze(1) # [BxQ] -> [Bx1xQ]
+    keys = keys.transpose(0,1).transpose(1,2) # [TxBxK] -> [BxKxT]
+    energy = torch.bmm(query, keys) # [Bx1xQ]x[BxKxT] -> [Bx1xT]
+    energy = F.softmax(energy.mul_(self.scale), dim=2) # scale, normalize
+
+    values = values.transpose(0,1) # [TxBxV] -> [BxTxV]
+    linear_combination = torch.bmm(energy, values).squeeze(1) #[Bx1xT]x[BxTxV] -> [BxV]
+    return energy, linear_combination
+
+class Time_SelfAttention(nn.Module):
+  def __init__(self, embedding_dim, hidden_dim):
+    super(Time_SelfAttention, self).__init__()
+    self.encoder = RNNEncoder(embedding_dim, hidden_dim)
+    self.attention = SelfAttention(hidden_dim*2)
+
+    # size = 0
+    # for p in self.parameters():
+    #   size += p.nelement()
+    # print('Total param size: {}'.format(size))
+
+
+  def forward(self, input):
+    x = input.transpose(0, 1).contiguous()
+    outputs, hidden = self.encoder(x)
+    if isinstance(hidden, tuple): # LSTM
+      hidden = hidden[1] # take the cell state
+
+    if self.encoder.bidirectional: # need to concat the last 2 hidden layers
+      hidden = torch.cat([hidden[-1], hidden[-2]], dim=1)
+    else:
+      hidden = hidden[-1]
+
+    # max across T?
+    # Other options (work worse on a few tests):
+    # linear_combination, _ = torch.max(outputs, 0)
+    # linear_combination = torch.mean(outputs, 0)
+    
+    energy, linear_combination = self.attention(hidden, outputs, outputs) 
+
+    return  linear_combination,outputs
+
+class CrossAttention(nn.Module):
+    def __init__(self, embedding_dim, hidden_dim):
+        super(CrossAttention, self).__init__()
+        #定义线性变换函数
+        self.linear_q = nn.Linear(embedding_dim, hidden_dim, bias=False)
+        self.linear_k = nn.Linear(embedding_dim, hidden_dim, bias=False)
+        self._norm_fact = 1 / math.sqrt(hidden_dim)
+        n=100
+        self.mask=torch.zeros((n,n),dtype=torch.float32).cuda()
+        for i in range(n):
+            for j in range(n):
+                if abs(i-j)<2:
+                    self.mask[i][j]=1.0
+
+    def forward(self, x,y):
+        # x: batch, n, dim_q
+        #根据文本获得相应的维度
+
+        q = self.linear_q(x)  # batch, n, dim_k
+        k = self.linear_k(y)  # batch, n, dim_k
+        v=y
+        #q*k的转置 并*开根号后的dk
+
+        dist = torch.bmm(q, k.transpose(1, 2)) * self._norm_fact  # batch, n, n
+        n=dist.size()[-1]
+        mask=self.mask[:n,:n].contiguous()
+        dist*=mask
+        #归一化获得attention的相关系数
+        dist = torch.softmax(dist, dim=-1)  # batch, n, n
+        #attention系数和v相乘，获得最终的得分
+        att = torch.bmm(dist, v)
+        return att,dist
+
+
+class Voice_Time_CrossAttention(nn.Module):
+  def __init__(self, embedding_dim, hidden_dim):
+    super(Voice_Time_CrossAttention, self).__init__()
+    self.encoder = RNNEncoder(embedding_dim, hidden_dim)
+    self.cross_attention = CrossAttention(embedding_dim,hidden_dim)
+    self.attention = SelfAttention(hidden_dim*2)
+    # size = 0
+    # for p in self.parameters():
+    #   size += p.nelement()
+    # print('Total param size: {}'.format(size))
+
+
+  def forward(self, input,query):
+    x,energy = self.cross_attention(query, input) 
+    x = input.transpose(0, 1).contiguous()
+    outputs, hidden = self.encoder(x)
+
+    if isinstance(hidden, tuple): # LSTM
+      hidden = hidden[1] # take the cell state
+
+    if self.encoder.bidirectional: # need to concat the last 2 hidden layers
+      hidden = torch.cat([hidden[-1], hidden[-2]], dim=1)
+    else:
+      hidden = hidden[-1]
+
+    # max across T?
+    # Other options (work worse on a few tests):
+    # linear_combination, _ = torch.max(outputs, 0)
+    # linear_combination = torch.mean(outputs, 0)
+    
+    _, linear_combination = self.attention(hidden, outputs, outputs) 
+
+    return  linear_combination,energy

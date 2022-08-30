@@ -1,10 +1,56 @@
 DATA_ROOT: '/hdd/lzq/PartA/biosignals_raw'
-LOGS_ROOT: '../logs/'
-MODAL: "gsr" #gsr#ecg#emg
-GPUID: "0"
-EPOCH: 1000
-BATCH_SIZE: 1028
-EXTRACT_NUM: 6
-PROTOTYPE_HIDDEN_NUM: 6
-CLASS_NUM: 5
-TRAIN_RIO: 0.9
+MODEL_ROOT: '/hdd/sdd/lzq/DLMM_new/model'
+LOGS_ROOT: '/hdd/sdd/lzq/DLMM_new/model/logs'
+
+MODEL_NAME: 'voice_face_cross_mask.t7'
+MODEL_NAME2: 'voice_face_v10.t7'
+
+CHECKPOINT_NAME: face_res_att_gru_v10.t7
+CHECKPOINT_NAME2: voice_att_gru_v10.t7
+CHECKPOINT_NAME3: voice_face_cross_mask.t7
+
+GPUID: "7"
+
+EPOCH: 200
+SUB_EPOCH: 10
+BATCH_SIZE: 64
+TCN_BATCH_SIZE: 1
+
+FACE_OR_VOICE: 2
+
+VGG_OR_RESNET: 1
+EXTRACT_NUM: 512
+HIDDEN_NUM: 64
+CLASS_NUM: 2
+
+TCN_OR_LSTM: 0
+TCN_NUM: 3
+TCN_HIDDEN_NUM: [128,128,64,32]
+
+AU_INPUT_SIZE: [15,15]
+AU_HIDDEN_SIZE: 32
+AU_OUTPUT_SIZE: 32
+PIC_SIZE: 224
+
+TRAIN_RIO: 0.8
+DATA_PATHS: [
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2/label.csv",1],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1/label.csv",1],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2/label.csv",1],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3/label.csv",1],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4/label.csv",2],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/label.csv",2],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/label.csv",2],
+  #["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/label.csv",2],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain7","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain8","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2]
+  ]
+IS_POINT: True
+
+LR: 0.001
+WEIGHT_DELAY: 0.00001
