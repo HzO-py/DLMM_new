@@ -57,7 +57,7 @@ class VGG_regressor(nn.Module):
         #out = F.dropout(fea, p=0.5, training=self.training)
         #out = self.linear(out)
         return out,fea,None
-
+cnt=0
 class Resnet_regressor(nn.Module):
     def __init__(self,modal,is_gradcam=False):
         super(Resnet_regressor, self).__init__()
@@ -81,6 +81,7 @@ class Resnet_regressor(nn.Module):
                 x.register_hook(self.gram_func)
                 res=x.clone()
         fea = x.view(x.size(0), -1)
+
         out=self.linear(fea)
         return out,fea,res
 
@@ -88,7 +89,9 @@ class Prototype(nn.Module):#自定义类 继承nn.Module
 
     def __init__(self,inputNum,hiddenNum,outputNum):#初始化函数
         super(Prototype, self).__init__()#继承父类初始化函数
-
+        self.inputNum=inputNum
+        self.hiddenNum=hiddenNum
+        self.outputNum=outputNum
         self.fc1 = nn.Linear(inputNum, hiddenNum)
         self.fc2 = nn.Linear(hiddenNum, outputNum, bias = False)
 
@@ -610,11 +613,13 @@ class SelfAttention(nn.Module):
 
     query = query.unsqueeze(1) # [BxQ] -> [Bx1xQ]
     keys = keys.transpose(0,1).transpose(1,2) # [TxBxK] -> [BxKxT]
+
     energy = torch.bmm(query, keys) # [Bx1xQ]x[BxKxT] -> [Bx1xT]
     energy = F.softmax(energy.mul_(self.scale), dim=2) # scale, normalize
 
     values = values.transpose(0,1) # [TxBxV] -> [BxTxV]
     linear_combination = torch.bmm(energy, values).squeeze(1) #[Bx1xT]x[BxTxV] -> [BxV]
+    
     return energy, linear_combination
 
 class Time_SelfAttention(nn.Module):
@@ -646,73 +651,85 @@ class Time_SelfAttention(nn.Module):
     # linear_combination = torch.mean(outputs, 0)
     
     energy, linear_combination = self.attention(hidden, outputs, outputs) 
-
-    return  linear_combination,outputs
+    return  linear_combination,outputs[-1]
 
 class CrossAttention(nn.Module):
-    def __init__(self, embedding_dim, hidden_dim):
+    def __init__(self, embedding_dim):
         super(CrossAttention, self).__init__()
         #定义线性变换函数
-        self.linear_q = nn.Linear(embedding_dim, hidden_dim, bias=False)
-        self.linear_k = nn.Linear(embedding_dim, hidden_dim, bias=False)
-        self._norm_fact = 1 / math.sqrt(hidden_dim)
-        n=100
-        self.mask=torch.zeros((n,n),dtype=torch.float32).cuda()
+        # self.linear_q = nn.Linear(embedding_dim, hidden_dim, bias=False)
+        # self.linear_k = nn.Linear(embedding_dim, hidden_dim, bias=False)
+        self.scale = 1 / math.sqrt(embedding_dim)
+        #楚杰的窗口
+        n=300
+        self.mask=torch.ones((n,n),dtype=torch.float32).cuda()
+        inf=-1e9
         for i in range(n):
             for j in range(n):
-                if abs(i-j)<2:
-                    self.mask[i][j]=1.0
+                if abs(i-j)>=2:
+                    self.mask[i][j]=inf
 
-    def forward(self, x,y):
-        # x: batch, n, dim_q
-        #根据文本获得相应的维度
+    def forward(self, query,keys,values):
 
-        q = self.linear_q(x)  # batch, n, dim_k
-        k = self.linear_k(y)  # batch, n, dim_k
-        v=y
-        #q*k的转置 并*开根号后的dk
+        energy = torch.bmm(query, keys.transpose(1, 2))  # [B*T*Q]*[B*K*T]->[B*T*T]
 
-        dist = torch.bmm(q, k.transpose(1, 2)) * self._norm_fact  # batch, n, n
-        n=dist.size()[-1]
-        mask=self.mask[:n,:n].contiguous()
-        dist*=mask
+        #楚杰的窗口
+        # n=energy.size()[-1]
+        # mask=self.mask[:n,:n].contiguous()
+        # energy*=mask
         #归一化获得attention的相关系数
-        dist = torch.softmax(dist, dim=-1)  # batch, n, n
-        #attention系数和v相乘，获得最终的得分
-        att = torch.bmm(dist, v)
-        return att,dist
+        energy = F.softmax(energy.mul_(self.scale), dim=-1)  
 
+        #attention系数和v相乘，获得最终的得分
+        linear_combination = torch.bmm(energy, values)  # [B*T*T]*[B*T*V]->[B*T*V]
+
+        return energy,linear_combination
+
+class Face2Voice_Atention(nn.Module):
+    def __init__(self, embedding_dim):
+        super(Face2Voice_Atention, self).__init__()
+        self.fc=nn.Linear(embedding_dim,1)
+        self.dim=embedding_dim
+
+    def forward(self, input,query):
+        batch_dim=query.size()[0]
+        time_dim=query.size()[1]
+        query=query.view(-1,self.dim)
+        energy=self.fc(query).squeeze(-1)
+        #energy=F.softmax(energy,dim=-1)
+        energy=torch.diag(energy).view(batch_dim,time_dim,time_dim)
+        output=torch.bmm(energy,input)
+        return energy,output
 
 class Voice_Time_CrossAttention(nn.Module):
-  def __init__(self, embedding_dim, hidden_dim):
-    super(Voice_Time_CrossAttention, self).__init__()
-    self.encoder = RNNEncoder(embedding_dim, hidden_dim)
-    self.cross_attention = CrossAttention(embedding_dim,hidden_dim)
-    self.attention = SelfAttention(hidden_dim*2)
-    # size = 0
-    # for p in self.parameters():
-    #   size += p.nelement()
-    # print('Total param size: {}'.format(size))
+    def __init__(self, embedding_dim, hidden_dim):
+        super(Voice_Time_CrossAttention, self).__init__()
+        self.encoder = RNNEncoder(embedding_dim, hidden_dim)
+        self.cross_attention = Face2Voice_Atention(embedding_dim)
+        self.self_attention = SelfAttention(hidden_dim*2)
+        # size = 0
+        # for p in self.parameters():
+        #   size += p.nelement()
+        # print('Total param size: {}'.format(size))
 
 
-  def forward(self, input,query):
-    x,energy = self.cross_attention(query, input) 
-    x = input.transpose(0, 1).contiguous()
-    outputs, hidden = self.encoder(x)
+    def forward(self, input,query):
+        energy,x = self.cross_attention(input=input,query=query) 
+        x = x.transpose(0, 1).contiguous()
+        outputs, hidden = self.encoder(x)
 
-    if isinstance(hidden, tuple): # LSTM
-      hidden = hidden[1] # take the cell state
+        if isinstance(hidden, tuple): # LSTM
+            hidden = hidden[1] # take the cell state
 
-    if self.encoder.bidirectional: # need to concat the last 2 hidden layers
-      hidden = torch.cat([hidden[-1], hidden[-2]], dim=1)
-    else:
-      hidden = hidden[-1]
+        if self.encoder.bidirectional: # need to concat the last 2 hidden layers
+            hidden = torch.cat([hidden[-1], hidden[-2]], dim=1)
+        else:
+            hidden = hidden[-1]
 
-    # max across T?
-    # Other options (work worse on a few tests):
-    # linear_combination, _ = torch.max(outputs, 0)
-    # linear_combination = torch.mean(outputs, 0)
-    
-    _, linear_combination = self.attention(hidden, outputs, outputs) 
-
-    return  linear_combination,energy
+        # max across T?
+        # Other options (work worse on a few tests):
+        # linear_combination, _ = torch.max(outputs, 0)
+        # linear_combination = torch.mean(outputs, 0)
+        
+        _, linear_combination = self.self_attention(hidden, outputs, outputs) 
+        return  linear_combination,energy

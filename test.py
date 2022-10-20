@@ -1,184 +1,224 @@
-# from models import VGG,Classifier
-import torch
-# import torch.nn as nn
-# from models import VGG
-# import os
-# from PIL import Image
+# Topology W1 assignment
+# Huajun SUN
 import numpy as np
-import librosa
-import librosa.display
-import matplotlib.pyplot as plt
-# from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHorizontalFlip
-# from torchvision.transforms.functional import rotate
-# import dlib
-import cv2
-# import face_alignment
-# from skimage import io
-# detector = dlib.get_frontal_face_detector()
+# x = [[0,0],
+#      [1,1]]
+# size = [2,2]
+x = [[0, 0, 0, 0, 0, 0, 0],
+     [0, 0, 1, 1, 1, 1, 0],
+     [0, 0, 1, 1, 0, 1, 0],
+     [0, 1, 1, 1, 0, 1, 0],
+     [0, 1, 0, 1, 1, 0, 0],
+     [0, 0, 0, 0, 0, 0, 0]]
+size = [6, 7]
 
-# def load_img(file_path):
-#     transform = Compose([Resize(64),RandomCrop(48),RandomHorizontalFlip(),ToTensor()])
-#     img=np.array(Image.open(file_path).convert('L'))
-#     img = img[:, :, np.newaxis]
-#     img = np.concatenate((img, img, img), axis=2)
-#     img = Image.fromarray(img)
-#     img=transform(img)
-#     return img
 
-# def main(file_path):
-#     net2 = VGG("VGG19")
-#     checkpoint = torch.load(os.path.join('/hdd/lzq/facetrain/logs', 'face.t7'))
-#     net2.load_state_dict(checkpoint['net2'])
+def inverse_x(b):
+    """
+    :param b: a binary matrix
+    :return: r_x: the inverse for x
+    """
+    return b ^ np.ones_like(b)
 
-#     net3 = Classifier(512,2)
-#     net3.load_state_dict(checkpoint['net3'])
 
-#     net2.eval()
-#     net3.eval()
+def find_connection_4(t):
+    """
+    :param t: 3*3 binary matrix
+    :return: n: the number of connectivity number of 4_connect
+    """
+    mark = np.zeros_like(t)
+    label = 0
+    for i in range(3):
+        for j in range(3):
+            if i == 1 and j == 1:
+                continue  # skip the central point
+            if t[i][j] == 0:
+                continue
+            else:  # it meets one connect area
+                # get the labels of the left and up
+                if j - 1 >= 0:
+                    r_label = mark[i][j - 1]
+                else:
+                    r_label = 0
+                if i - 1 >= 0:
+                    u_label = mark[i - 1][j]
+                else:
+                    u_label = 0
 
-#     x=load_img(file_path)
-#     x=x.unsqueeze(0)
-#     x = net2(x)
-#     outputs = net3(x)
-#     _, predicted = torch.max(outputs.data, 1)
-#     print(predicted)
+                if r_label or u_label:
+                    if r_label > 0 and u_label > 0:
+                        mark[i][j] = min(r_label, u_label)  # get the smallest label
+                    else:
+                        mark[i][j] = max(r_label, u_label)  # get the label than is bigger than 0
+                else:
+                    label += 1  # label has to increase
+                    mark[i][j] = label
 
-# def face_points_detect(filename):
+    # backwards to see if there is 2-layer trees.
+    for i in range(2, -1, -1):
+        for j in range(2, -1, -1):
+            if i == 1 and j == 1:
+                continue  # skip the central point
+            if mark[i][j]:
+                # it meets one connect area
+                # get the labels of the left and up
+                if j + 1 < 3:
+                    r_label = mark[i][j + 1]
+                else:
+                    r_label = 0
+                if i + 1 < 3:
+                    u_label = mark[i + 1][j]
+                else:
+                    u_label = 0
+
+                if r_label or u_label:
+                    if r_label > 0 and u_label > 0:
+                        mark[i][j] = min(r_label, u_label)  # get the smallest label
+                    else:
+                        mark[i][j] = max(r_label, u_label)  # get the label than is bigger than 0
     
-#     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-#     fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._3D, flip_input=False,device="cuda")
+    #print("mark is :\n{}".format(mark))
+    l = [mark[0][1], mark[1][0], mark[1][2], mark[2][1]]
+    s = set(l)
+    s.discard(0)
+    # n = np.max(mark)
+    return len(s)
 
-#     input = io.imread(filename)
 
-#     preds = fa.get_landmarks(input)[0]
-#     x1=int(np.min(preds[:,0]))
-#     x2=int(np.max(preds[:,0]))
-#     y1=int(np.min(preds[:,1]))
-#     y2=int(np.max(preds[:,1]))
-#     print(x1,x2,y1,y2)
-#     io.imsave("../../test/face_img.jpg",input[y1:y2,x1:x2])
-#     print(list(preds[:,0]))
-#     print(list(preds[:,1]))
-#     print(list(preds[:,2]))
-#     # img=cv2.imread(filename)
-#     # gray_img=cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-#     # faces = detector(gray_img, 1)
-#     # if len(faces)==0:
-#     #     return
+def find_connection_8(t,flag):
+    """
+    :param t: 3*3 binary matrix
+    :return: n: the number of connectivity number of 4_connect
+    """
+    mark = np.zeros_like(t)
+    label = 0
+    for i in range(3):
+        for j in range(3):
+            if i == 1 and j == 1:
+                continue  # skip the central point
+            if t[i][j] == 0:
+                continue
+            else:  # it meets one connect area
+                # get the labels of the left and up, and 1030 o'clock
+                if j - 1 >= 0:
+                    l_label = mark[i][j - 1]
+                else:
+                    l_label = 0
+                if i - 1 >= 0:
+                    u_label = mark[i - 1][j]
+                else:
+                    u_label = 0
+                if j - 1 >= 0 and i - 1 >= 0:
+                    lu_label = mark[i - 1][j - 1]
+                else:
+                    lu_label = 0
+                if j + 1 <3  and i - 1 >= 0:
+                    ru_label = mark[i - 1][j + 1]
+                else:
+                    ru_label = 0
 
-#     # u=0
-#     # maxn=0
-#     # for i in range(len(faces)):
-#     #     (x1,x2,y1,y2)=(faces[i].left(),faces[i].right(),faces[i].top(),faces[i].bottom())
-#     #     h=y2-y1
-#     #     w=x2-x1
-#     #     if h*w>maxn:
-#     #         u=i
-#     # (x1,x2,y1,y2)=(faces[u].left(),faces[u].right(),faces[u].top(),faces[u].bottom())
-#     # face_img=img[y1:y2,x1:x2]
-#     # cv2.imwrite("/hdd/sdd/lzq/DLMM_new/test/face_img.jpg",face_img)
+                if l_label or u_label or lu_label or ru_label:
+                    if min(l_label, u_label, lu_label,ru_label):
+                        mark[i][j] = min(l_label, u_label, lu_label,ru_label)
+                    else:
+                        m = 10000
+                        for z in [l_label, u_label, lu_label,ru_label]:
+                            if 0 < z < m: m = z
+                        mark[i][j] = m
+                    # get the smallest label that is bigger than 0
+                else:
+                    label += 1  # label has to increase
+                    mark[i][j] = label
 
-# #face_points_detect("/hdd/sdd/lzq/DLMM_new/test/img.jpg")
-# #main("/home/lzq/srp/DLMM_new/test/pain.png")
-# # input = io.imread("/hdd/sdd/lzq/DLMM_new/test/img.jpg")
-# # input2=cv2.imread("/hdd/sdd/lzq/DLMM_new/test/img.jpg")
-# # input2=cv2.cvtColor(input2,cv2.COLOR_BGR2RGB)
-# # print(input.shape)
-# import scipy.io.wavfile as wav
-# from python_speech_features import mfcc
-# import time
+    # backwards to see if there is 2-layer trees.
+    for i in range(2, -1, -1):
+        for j in range(2, -1, -1):
+            if i == 1 and j == 1:
+                continue  # skip the central point
+            if mark[i][j]:
+                # it meets one connect area
+                # get the labels of the right and up and right-up: 430
+                if j + 1 < 3:
+                    r_label = mark[i][j + 1]
+                else:
+                    r_label = 0
+                if i + 1 <3:
+                    u_label = mark[i + 1][j]
+                else:
+                    u_label = 0
+                if j + 1 < 3 and i + 1 < 3:
+                    rd_label = mark[i + 1][j + 1]
+                else:
+                    rd_label = 0
+                if j - 1 >=0 and i + 1 < 3:
+                    ld_label = mark[i + 1][j - 1]
+                else:
+                    ld_label = 0
 
-# # starttime = time.time()
-# # for i in range(29):
-# #     (rate,sig) = wav.read('/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2/voice/17/17-ZZC-02.wav_folder/'+str(i)+'.wav')
+                if r_label or u_label or rd_label or ld_label:
+                    if min(r_label, u_label, rd_label,ld_label):
+                        mark[i][j] = min(r_label, u_label, rd_label,ld_label)
+                    else:
+                        m = 10000
+                        for z in [r_label, u_label, rd_label,ld_label]:
+                            if 0 < z < m:
+                                m = z
+                        mark[i][j] = m
+                    # get the smallest label that is bigger than 0
+                    if r_label > 0 and u_label > 0:
+                        mark[i][j] = min(r_label, u_label)  # get the smallest label
+                    else:
+                        mark[i][j] = max(r_label, u_label)  # get the label than is bigger than 0
+    if flag:
+        print("mark is :\n{}".format(mark))
+    # l = [mark[0][1], mark[1][0], mark[1][2], mark[2][1]]
+    # s = set(l)
+    # s.discard(0)
+    n = np.max(mark)
+    return n
 
-# #     x = mfcc(sig,rate)
 
-# # endtime = time.time()
-# # dtime = endtime - starttime
-# # print(dtime)
-# from math import *
-# os.environ["CUDA_VISIBLE_DEVICES"] = '0'
-# transform = Compose([Resize([44,44]),ToTensor()])
-# def load_img(file_path):
-#     img = Image.open(file_path).convert('L')
-#     img=np.array(img)
-#     img = img[:, :, np.newaxis]
-#     img = np.concatenate((img, img, img), axis=2)
-#     img = Image.fromarray(img)
-#     img = transform(img)
-#     return img
+if __name__ == "__main__":
 
-# def dis(p1,p2):
-#     ans=0
-#     for i in range(p1.shape[0]):
-#         ans+=(p1[i]-p2[i])**2
-#     return sqrt(ans)
+    count_4 = 0
+    count_8 = 0
+    res_4 = np.zeros(size)
+    res_8 = np.zeros(size)
+    inx = inverse_x(x)
 
-# def dotproduct(p1,p2):
-#     ans=0
-#     for i in range(p1.shape[0]):
-#         ans+=p1[i]*p2[i]
-#     return ans
+    for i in range(size[0]):
+        for j in range(size[1]):
+            temp = np.zeros([3, 3])
+            intemp = np.zeros([3, 3])
+            for k in range(-1, 2):
+                for b in range(-1, 2):
+                    if i + k < 0 or i + k >= size[0]:
+                        continue
+                    if j + b < 0 or j + b >= size[1]:
+                        continue
+                    temp[k + 1][b + 1] = x[i + k][j + b]
+                    intemp[k + 1][b + 1] = inx[i + k][j + b]
+            if i==3 and (j==1 or j==4):
+                print("temp is \n{}".format(temp))
+            flag=True if i==3 and (j==1 or j==4) else False
+            incon_4 = find_connection_4(intemp)
+            con_4 = find_connection_4(temp)
+            incon_8 = find_connection_8(intemp,flag)
+            con_8 = find_connection_8(temp,flag)
+            if con_4 == 1 and incon_4 == 1:
+                res_4[i][j] = 1
+                # print(1)
+                count_4 += 1
+            if con_8 == 1 and incon_8 == 1:
+                res_8[i][j] = 1
+                # print(1)
+                count_8 += 1
+            # else: print(0)
 
-# def load_face_point(file_path):
-#     npy=np.load(file_path)
-#     angle=acos(dotproduct(npy[8][:2]-npy[27][:2],np.array([0,1]))/dis(npy[8][:2],npy[27][:2]))
-#     if (npy[8][:2]-npy[27][:2])[0]>0:
-#         angle=2.0*pi-angle
-#     return angle/pi*180
-
-# emo=['angry','disgust','fear','happy','sad','surprise','neutral']
-# modal=VGG('VGG19').cuda()
-# modal.load_state_dict(torch.load('/hdd/sdd/lzq/DLMM_new/model/PrivateTest_model.t7')['net'])
-# path='/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5/face/404/404-SLY-04.mp4'
-# for file in sorted(os.listdir(path),key=lambda x:int(x.split('.')[0])):
-#     if file.endswith('jpg'):
-#         filepath=os.path.join(path,file)
-#         npypath=os.path.join(path,file.split('.')[0]+'.npy')
-#         x=load_img(filepath)
-#         angle=load_face_point(npypath)
-#         x=rotate(x,angle)
-#         x=x.unsqueeze(0).cuda()
-#         out,fea=modal(x)
-#         print(file,angle,emo[out[0].argmax()],out[0].max())
-#         #print(file,np.load(filepath)[31:35,:2])
-
-# import os
-# import shutil
-# paths=[
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4",
-#     #"/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain7",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain8",
-#   ]
-# for path in paths:
-#     face_path=os.path.join(path,'face')
-#     shutil.rmtree(face_path)
-#     print(face_path)
-# logmelspec=np.load("/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2/voice/140/140-QRX-04.wav_fftnpy/0.npy")
-# print(logmelspec)
-# plt.figure()
-# librosa.display.specshow(logmelspec, sr=44100,x_axis='time',y_axis='mel')
-# #plt.axis('off')
-# plt.savefig('/hdd/sdd/lzq/DLMM_new/project/DLMM_new/test/voice.jpg')
-# print(librosa.mel_to_hz(64))
-a=torch.Tensor([[9,4,3],[1,2,3]])
-b=torch.Tensor([[1,1,0],[0,1,1]])
-c=torch.zeros((8,8))
-for i in range(8):
-    for j in range(8):
-        if abs(i-j)<2:
-            c[i][j]=1
-print(c)
+        # print('\n')
+    # print(np.array(x))
+    # print(inx)
+    # # print(count_4)
+    print(count_8)
+    # # print(res_4)
+    print(res_8)

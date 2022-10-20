@@ -2,15 +2,15 @@ DATA_ROOT: '/hdd/lzq/PartA/biosignals_raw'
 MODEL_ROOT: '/hdd/sdd/lzq/DLMM_new/model'
 LOGS_ROOT: '/hdd/sdd/lzq/DLMM_new/model/logs'
 
-MODEL_NAME: 'voice_proto_v11.t7'
-MODEL_NAME2: 'voice_bio_v11.t7'
+MODEL_NAME: 'hr_v11.t7'
+MODEL_NAME2: 'voice_face_v10.t7'
 
-CHECKPOINT_NAME: face_time_v11.t7
-CHECKPOINT_NAME2: voice_v11.t7
-CHECKPOINT_NAME3: voice_cross_mask_frozen_v11.t7
-CHECKPOINT_NAME4: bio_v11.t7
+CHECKPOINT_NAME: face_v11.t7
+CHECKPOINT_NAME2: voice_att_gru_v10.t7
+CHECKPOINT_NAME3: voice_face_cross_mask.t7
 
-GPUID: "7"
+
+GPUID: "6"
 
 EPOCH: 200
 SUB_EPOCH: 10
@@ -18,12 +18,12 @@ BATCH_SIZE: 64
 TCN_BATCH_SIZE: 1
 
 FACE_OR_VOICE: "face"
-BIO_MODAL: "bio"
+BIO_MODAL: "hr"
 
 VGG_OR_RESNET: 1
-EXTRACT_NUM: 512
+EXTRACT_NUM: 1
 HIDDEN_NUM: 64
-CLASS_NUM: 9
+CLASS_NUM: 2
 
 TCN_OR_LSTM: 0
 TCN_NUM: 3

@@ -105,8 +105,8 @@ def getLable(label_path,person,video_id):
                 if video_id==-1:
                     age_class=-1
                     if line[6]!="":
-                        age=int(line[6][:-1])
-                        if line[6][-1]=='月':
+                        age=int(line[6])
+                        if age==0:
                             age_class=0
                         elif age>=1 and age<=3:
                             age_class=1
@@ -147,8 +147,8 @@ def getLable(label_path,person,video_id):
                         zongfen_base=14
                     age_class=-1
                     if line[11]!="":
-                        age=int(line[11][:-1])
-                        if line[11][-1]=='月':
+                        age=int(line[11])
+                        if age==0:
                             age_class=0
                         elif age>=1 and age<=3:
                             age_class=1

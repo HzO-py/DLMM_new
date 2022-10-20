@@ -479,8 +479,8 @@ class AllDataset(Dataset):
                 for item in self.all_items:
                     for img in sorted(os.listdir(item[floor(self.modal)]),key=lambda x:int(x.split('.')[0])):
                         if img.endswith(houzhui):
-                            if self.modal==1 and not self.voice_open_mouth(os.path.join(item[floor(self.modal)],img),0.2):
-                                continue
+                            # if self.modal==1 and not self.voice_open_mouth(os.path.join(item[floor(self.modal)],img),0.2):
+                            #     continue
                             self.items.append([os.path.join(item[floor(self.modal)],img),item[-1]])
                 self.all_items=self.items
         print(len(self.all_items))
@@ -556,12 +556,19 @@ class AllDataset(Dataset):
         return torch.Tensor([aus_eye,aus_mouth])
 
     def get_feature(self, arr):
-        return (arr) / (np.max(arr) - np.min(arr))
+        if np.std(arr)==0:
+            return arr - np.mean(arr)
+        return (arr - np.mean(arr)) / np.std(arr)
 
 
     def load_seq(self,file_path):
-        data = np.loadtxt(file_path, delimiter=";", dtype=np.double)
-        seq=np.array([self.get_feature(data[:,1]), self.get_feature(data[:,3]), self.get_feature(data[:,4])])
+        data = np.loadtxt(file_path, delimiter=";", dtype=np.float)
+        try:
+            seq=np.array([self.get_feature(data[:,1]), self.get_feature(data[:,3]), self.get_feature(data[:,4])])
+        except Exception:
+            seq=np.zeros((3,1))
+
+        
         return seq 
 
     def voice_open_mouth(self,file_path,rio):
@@ -604,12 +611,13 @@ class AllDataset(Dataset):
                         imgs.append(img_one)
                         npys.append(self.load_npy(voice_path))
                         face_points.append(self.load_face_point(npypath))
-            # for npy in sorted(os.listdir(item[1]),key=lambda x:int(x.split('.')[0])):
-            #     if npy.endswith('npy'):
-            #         npys.append(self.load_npy(os.path.join(item[1],npy)))
             imgs=torch.stack(imgs)
             npys=torch.stack(npys)
             face_points=torch.stack(face_points)
+            if self.modal==2:
+                bios=self.load_seq(item[2])
+                bios=torch.tensor(bios, dtype=torch.float)
+
         else:
             if self.modal==0:
                 imgs=self.load_img(item[0])
@@ -627,7 +635,7 @@ class AllDataset(Dataset):
             #bios=self.load_seq(item[2])
         # if self.is_time:
         #     setMean(face_points,label)
-        return {'xs': [imgs,npys,bios,face_points,angle],'y':label}
+        return {'xs': [imgs,npys,bios,item[0]],'y':label}
 
 def collate_fn(batch_datas):
     modals=[[],[],[],[]]
@@ -641,22 +649,25 @@ def collate_fn(batch_datas):
 
 def main():
     DATA_PATHS=[
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2/label.csv",1],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1/label.csv",1],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2/label.csv",1],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3/label.csv",1],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4/label.csv",2],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/label.csv",2],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/label.csv",2],
-    #["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/label.csv",2],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain7","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
-    ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain8","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2]
-    ]
+  #2-138
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  #139-244
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  #255-312
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  #313-352
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  #353-509
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  #510-582
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  #583-720
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain7","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  #721-843
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain8","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  #844-1049
+  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ]
     train_dataset=AllDataset(0,0.0,DATA_PATHS,'face',1)
     train_dataloader = DataLoader(train_dataset, batch_size=1,shuffle=True)
     from tqdm import tqdm
