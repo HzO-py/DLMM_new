@@ -115,17 +115,17 @@ def two_train():
     model=TwoModel(facemodel,voicemodel,Voice_Time_CrossAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*4,HIDDEN_NUM))
     model.train_init(dataset,LR,WEIGHT_DELAY,[model.regressor])
     model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME4)))
-    model.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME2))
+    model.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
 
 def three_train():
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,'bio',is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
     facemodel=SingleModel(Resnet_regressor('face'),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"face")
     voicemodel=SingleModel(Resnet_regressor('voice'),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"voice")
     biomodel=BioModel(Time_SelfAttention(3,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),'bio')
-    model=TwoModel(facemodel,voicemodel,Voice_Time_CrossAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*4,HIDDEN_NUM),biomodel)
+    model=TwoModel(facemodel,voicemodel,Voice_Time_CrossAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor_self_att(3,HIDDEN_NUM//2,HIDDEN_NUM//2,0.1),biomodel)
     model.train_init(dataset,LR,WEIGHT_DELAY,[model.regressor])
-    model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME4)))
-    model.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME2))
+    model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)),bio_checkout=torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3)))
+    model.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
 
 def bio_train(bio_modal,is_selfatt,is_pro):
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,'bio',is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
@@ -144,10 +144,10 @@ def DBSCAN_train(modal,is_selfatt):
 
 
 #voice_train()
-three_train()
+#three_train()
 #time_extractor_train(FACE_OR_VOICE,is_selfatt=True,is_pro=True)
 #bio_train(BIO_MODAL,is_selfatt=True,is_pro=True)
 #extractor_test(FACE_OR_VOICE)
 #extractor_train(FACE_OR_VOICE)
 #print(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["acc"])
-#DBSCAN_train(FACE_OR_VOICE,is_selfatt=True)
+DBSCAN_train(FACE_OR_VOICE,is_selfatt=True)

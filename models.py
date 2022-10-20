@@ -132,10 +132,14 @@ class Regressor(nn.Module):# 最终的分类器，用于输出预测概率
         out = self.fc3(x)
         return out
 
-class Regressor_self(nn.Module):# 最终的分类器，用于输出预测概率
+class Regressor_self_att(nn.Module):# 最终的分类器，用于输出预测概率
     def __init__(self,inputNum,hiddenNum_1, hiddenNum_2,is_droup):#初始化函数
-        super(Regressor_self, self).__init__()#继承父类初始化函数
+        super(Regressor_self_att, self).__init__()#继承父类初始化函数
         self.is_droup = is_droup
+
+        self.att0 = nn.Linear(inputNum, hiddenNum_1, bias = True)
+        self.att1 = nn.Linear(hiddenNum_1, inputNum, bias = False)
+
         self.fc1 = nn.Linear(inputNum, hiddenNum_1, bias = True)
         if is_droup is not None:
             self.fc1_droupout = nn.Dropout(p=is_droup)
@@ -143,7 +147,11 @@ class Regressor_self(nn.Module):# 最终的分类器，用于输出预测概率
         if is_droup is not None:
             self.fc2_droupout = nn.Dropout(p=is_droup)
         self.fc3 = nn.Linear(hiddenNum_2, 1, bias = False)
+    
     def forward(self, x):
+        att=self.att0(x)
+        att=self.att1(att)
+        x=x*att
         x = self.fc1(x)
         x = F.relu(x)
         if self.is_droup:
@@ -153,7 +161,7 @@ class Regressor_self(nn.Module):# 最终的分类器，用于输出预测概率
         if self.is_droup:
             x = self.fc2_droupout(x)
         out = self.fc3(x)
-        return out
+        return out,att
 
 class ResidualBlock(nn.Module):
     def __init__(self, inchannel, outchannel, stride=1):

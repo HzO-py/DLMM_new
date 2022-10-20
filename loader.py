@@ -630,8 +630,7 @@ class AllDataset(Dataset):
                 npys=self.load_npy(item[0])
             else:
                 face_points=self.load_face_point(item[0])
-        if len(item)==4:
-            pass
+        
             #bios=self.load_seq(item[2])
         # if self.is_time:
         #     setMean(face_points,label)

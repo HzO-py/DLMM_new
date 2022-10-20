@@ -50,6 +50,7 @@ class SingleModel():
         self.extractor.load_state_dict(checkpoint['extractor'])
         self.time_extractor.load_state_dict(checkpoint['time_extractor'])
         self.regressor.load_state_dict(checkpoint['regressor'])
+        print(checkpoint['acc'])
         self.testloss_best=checkpoint['acc']
 
     def train_init(self,dataset,LR,WEIGHT_DELAY,nets,train_criterion,test_criterion):
@@ -321,14 +322,32 @@ class SingleModel():
                     bar.update(1)
                 bar.close()
             space_fea=np.array(space_fea)
-            print(space_fea,space_path)
             np.save('/hdd/sdd/lzq/DLMM_new/dataset/space_fea.npy',space_fea)
             np.save('/hdd/sdd/lzq/DLMM_new/dataset/space_path.npy',np.array(space_path))
         self.DBSCAN_space(space_fea,space_path)
 
     def DBSCAN_space(self,space_fea,space_path):
-        clustering = DBSCAN(eps=0.4, min_samples=4).fit(space_fea)
-        print(clustering.labels_)
+        # eps_list=[]
+        # for i in range(len(space_fea)):
+        #     dis_list=[]
+        #     for j in range(len(space_fea)):
+        #         dis=np.linalg.norm(space_fea[i]-space_fea[j])
+        #         dis_list.append(dis)
+        #     dis_list.sort()
+        #     eps_list.append(dis_list[2])
+        # eps_list.sort(reverse=True)
+        # import matplotlib.pyplot as plt
+        # x=range(len(space_fea))
+        # y=eps_list
+        # plt.plot(x,y,label='Frist line',linewidth=1,color='r')
+        # plt.xlabel('sample')
+        # plt.ylabel('3-distance')
+        # plt.legend()
+        # plt.savefig('/hdd/sdd/lzq/DLMM_new/dataset/space_fea.jpg')
+
+        # print(eps_list)
+        # return
+        clustering = DBSCAN(eps=0.3, min_samples=4).fit(space_fea)
         group={}
         for i,num in enumerate(clustering.labels_):
             if str(num) not in group:
@@ -349,14 +368,17 @@ class TwoModel():
         
 
     def load_checkpoint(self,face_checkpoint,voice_checkpoint,cross_checkpoint=None,bio_checkout=None):
-        self.VoiceModel.extractor.load_state_dict(voice_checkpoint['net'])
+        self.FaceModel.load_time_checkpoint(face_checkpoint)
+        self.VoiceModel.load_time_checkpoint(voice_checkpoint)
+        self.biomodel.load_time_checkpoint(bio_checkout)
+        # self.VoiceModel.extractor.load_state_dict(voice_checkpoint['net'])
 
-        if cross_checkpoint:
-            self.FaceModel.load_time_checkpoint(face_checkpoint)
-            self.CrossModel.load_state_dict(cross_checkpoint['cross'])
-            self.biomodel.time_extractor.load_state_dict(bio_checkout['time_extractor'])
-        else:
-            self.FaceModel.extractor.load_state_dict(face_checkpoint['net'])
+        # if cross_checkpoint:
+        #     self.FaceModel.load_time_checkpoint(face_checkpoint)
+        #     self.CrossModel.load_state_dict(cross_checkpoint['cross'])
+        #     self.biomodel.time_extractor.load_state_dict(bio_checkout['time_extractor'])
+        # else:
+        #     self.FaceModel.extractor.load_state_dict(face_checkpoint['net'])
             
 
     def train_init(self,dataset,LR,WEIGHT_DELAY,nets):
@@ -377,27 +399,32 @@ class TwoModel():
         y = y.cuda()
 
         features = [[],[]]
-        extractor_models=[self.FaceModel.extractor,self.VoiceModel.extractor]
+        outputs_list=[]
+        models=[self.FaceModel,self.VoiceModel]
         with torch.no_grad():
-            for i in range(1):
+            for i in range(2):
                 for imgs in xs[i]:
                     imgs=imgs.cuda()
-                    _,fea,_=extractor_models[i](imgs)
+                    _,fea,_=models[i].extractor(imgs)
                     features[i].append(fea)
                 features[i]=torch.stack(features[i])
+                time_outputs,_=models[i].time_extractor(features[i])
+                outputs_list.append(models[i].regressor(time_outputs))
         
             #voice_outputs,_=self.CrossModel(input=features[1],query=features[0])
-            face_outputs,_=self.FaceModel.time_extractor(features[0])
-            #outputs=torch.cat((face_outputs,voice_outputs),dim=-1)
+            
+            outputs=torch.cat((outputs_list[0],outputs_list[1]),dim=-1)
 
             if self.biomodel:
                 bio_input=xs[2][0].transpose(0,1).unsqueeze(0).cuda()
                 bio_ouputs,_=self.biomodel.time_extractor(bio_input)
+                outputs_list.append(self.biomodel.regressor(bio_ouputs))
 
-                outputs=torch.cat((face_outputs,bio_ouputs),dim=-1)
+                outputs=torch.cat((outputs_list[0],outputs_list[1],outputs_list[2]),dim=-1)
+
                 #outputs=torch.cat((torch.randn((1,128)).cuda(),torch.randn((1,128)).cuda(),torch.randn((1,128)).cuda()),dim=-1)
 
-        outputs=self.regressor(outputs)
+        outputs,att=self.regressor(outputs)
 
         return outputs,y
 
@@ -431,11 +458,18 @@ class TwoModel():
 
     def train(self,EPOCH,savepath):
         self.FaceModel.extractor.eval()
-        self.VoiceModel.extractor.eval()
         self.FaceModel.time_extractor.eval()
+        self.FaceModel.regressor.eval()
+
+        self.VoiceModel.extractor.eval()
+        self.VoiceModel.time_extractor.eval()
+        self.VoiceModel.regressor.eval()
+
         self.CrossModel.eval()
+
         if self.biomodel:
             self.biomodel.time_extractor.eval()
+            self.biomodel.regressor.eval()
 
         for epoch in range(EPOCH):
             bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train epoch {epoch}")
@@ -565,6 +599,7 @@ class BioModel():
     def load_time_checkpoint(self,checkpoint):
         self.time_extractor.load_state_dict(checkpoint['time_extractor'])
         self.regressor.load_state_dict(checkpoint['regressor'])
+        print(checkpoint['acc'])
         self.testloss_best=checkpoint['acc']
 
     def train_init(self,dataset,LR,WEIGHT_DELAY,nets,train_criterion,test_criterion):
