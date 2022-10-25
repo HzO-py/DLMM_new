@@ -2,7 +2,7 @@ DATA_ROOT: '/hdd/lzq/PartA/biosignals_raw'
 MODEL_ROOT: '/hdd/sdd/lzq/DLMM_new/model'
 LOGS_ROOT: '/hdd/sdd/lzq/DLMM_new/model/logs'
 
-MODEL_NAME: 'face_voice_bio_wan_v11.t7'
+MODEL_NAME: 'experts_face_v11.t7'
 MODEL_NAME2: 'voice_bio_v11.t7'
 
 CHECKPOINT_NAME: face_time_v11.t7
@@ -10,7 +10,7 @@ CHECKPOINT_NAME2: voice_time_v11.t7
 CHECKPOINT_NAME3: bio_v11.t7
 CHECKPOINT_NAME4: bio_v11.t7
 
-GPUID: "7"
+GPUID: "6"
 
 EPOCH: 200
 SUB_EPOCH: 10

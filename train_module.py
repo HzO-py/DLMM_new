@@ -18,7 +18,9 @@ from loader import BioDataset,FaceDataset,VoiceDataset,AllDataset
 import pdb
 import matplotlib.pyplot as plt
 from torch.nn.utils.rnn import pack_sequence
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN,KMeans
+from sklearn.manifold import TSNE
+from typing import List
 
 class DataSet():
     def __init__(self,batch_size,TRAIN_RIO,DATA_PATHS,modal,is_time,collate_fn,pic_size):
@@ -50,7 +52,7 @@ class SingleModel():
         self.extractor.load_state_dict(checkpoint['extractor'])
         self.time_extractor.load_state_dict(checkpoint['time_extractor'])
         self.regressor.load_state_dict(checkpoint['regressor'])
-        print(checkpoint['acc'])
+        #print(checkpoint['acc'])
         self.testloss_best=checkpoint['acc']
 
     def train_init(self,dataset,LR,WEIGHT_DELAY,nets,train_criterion,test_criterion):
@@ -136,7 +138,7 @@ class SingleModel():
             else:
                 outputs=self.regressor(lstm_output)
         else:
-            y=xs[-1]
+            prototype_loss=xs[-1]
         return outputs,y,prototype_loss
 
     def classifier_test(self):
@@ -230,7 +232,7 @@ class SingleModel():
 
     def time_extractor_train(self,EPOCH,savepath,is_selfatt):
         self.extractor.eval()
-        for epoch in range(EPOCH):
+        for epoch in range(1):
             bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train epoch {epoch}")
             for net in self.train_nets:
                 net.train()
@@ -285,48 +287,51 @@ class SingleModel():
             self.test_hunxiao=tmp
             print(self.test_hunxiao)
             
-            if testloss < self.testloss_best:
-                self.testloss_best = testloss
-                state = {
-                'extractor': self.extractor.state_dict(),
-                'time_extractor': self.time_extractor.state_dict(),
-                'regressor': self.regressor.state_dict(),
-                'acc': self.testloss_best,
-            }
-                if self.prototype:
-                    state['prototype']=self.prototype.state_dict()
-                torch.save(state, savepath)
+            # if testloss < self.testloss_best:
+            #     self.testloss_best = testloss
+            #     state = {
+            #     'extractor': self.extractor.state_dict(),
+            #     'time_extractor': self.time_extractor.state_dict(),
+            #     'regressor': self.regressor.state_dict(),
+            #     'acc': self.testloss_best,
+            # }
+            #     if self.prototype:
+            #         state['prototype']=self.prototype.state_dict()
+            #     torch.save(state, savepath)
                 
-            self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
-            print('  [Test] mae: %.03f sum_pro: %.03f [Best] mae: %.03f'% (testloss,sum_pro/cnt,self.testloss_best))
+            # self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
+            # print('  [Test] mae: %.03f sum_pro: %.03f [Best] mae: %.03f'% (testloss,sum_pro/cnt,self.testloss_best))
 
     def feature_space(self,is_selfatt):
         bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train")
         for net in self.train_nets:
             net.eval()
         space_fea=[]
+        space_y=[]
         space_path=[]
-        if os.path.exists('/hdd/sdd/lzq/DLMM_new/dataset/space_fea.npy'):
+        if os.path.exists('/hdd/sdd/lzq/DLMM_new/dataset/space_y.npy'):
             space_fea=np.load('/hdd/sdd/lzq/DLMM_new/dataset/space_fea.npy')
+            space_y=np.load('/hdd/sdd/lzq/DLMM_new/dataset/space_y.npy')
             space_path=np.load('/hdd/sdd/lzq/DLMM_new/dataset/space_path.npy')
             space_path=space_path.tolist()
         else:
             with torch.no_grad():
                 for data in self.dataset.train_dataloader:
-                    
                     if (data['xs'][0][0]).size()[0]<10:
                         continue
-                    outputs,path,_=self.time_extractor_forward(data,is_train=False,is_selfatt=is_selfatt,is_dbscan=True)
+                    outputs,y,path=self.time_extractor_forward(data,is_train=False,is_selfatt=is_selfatt,is_dbscan=True)
                     space_fea.append(outputs.cpu().squeeze(0).numpy())
+                    space_y.append(y.cpu().squeeze(0).numpy())
                     space_path.append(path)
                     bar.update(1)
                 bar.close()
             space_fea=np.array(space_fea)
             np.save('/hdd/sdd/lzq/DLMM_new/dataset/space_fea.npy',space_fea)
+            np.save('/hdd/sdd/lzq/DLMM_new/dataset/space_y.npy',space_y)
             np.save('/hdd/sdd/lzq/DLMM_new/dataset/space_path.npy',np.array(space_path))
-        self.DBSCAN_space(space_fea,space_path)
+        return self.cluster_space(space_fea,space_y,space_path)
 
-    def DBSCAN_space(self,space_fea,space_path):
+    def cluster_space(self,space_fea,space_y,space_path):
         # eps_list=[]
         # for i in range(len(space_fea)):
         #     dis_list=[]
@@ -336,7 +341,6 @@ class SingleModel():
         #     dis_list.sort()
         #     eps_list.append(dis_list[2])
         # eps_list.sort(reverse=True)
-        # import matplotlib.pyplot as plt
         # x=range(len(space_fea))
         # y=eps_list
         # plt.plot(x,y,label='Frist line',linewidth=1,color='r')
@@ -347,14 +351,56 @@ class SingleModel():
 
         # print(eps_list)
         # return
-        clustering = DBSCAN(eps=0.3, min_samples=4).fit(space_fea)
-        group={}
-        for i,num in enumerate(clustering.labels_):
-            if str(num) not in group:
-                group[str(num)]=[]
-            group[str(num)].append(space_path[i])
-        for k,v in group.items():
-            print(k,len(v)) 
+        #clustering = DBSCAN(eps=0.3, min_samples=4).fit(space_fea)
+        if os.path.exists('/hdd/sdd/lzq/DLMM_new/dataset/kmeans_centerList.npy'):
+            space_path=np.load('/hdd/sdd/lzq/DLMM_new/dataset/kmeans_space_path.npy', allow_pickle='TRUE')
+            space_path=space_path.item()
+            centerList=np.load('/hdd/sdd/lzq/DLMM_new/dataset/kmeans_centerList.npy')
+
+        else:
+            clustering = KMeans(n_clusters=3).fit(space_fea)
+            group={}
+            for i,num in enumerate(clustering.labels_):
+                if str(num) not in group:
+                    group[str(num)]=[]
+                group[str(num)].append(space_path[i])
+
+            space_path={}
+            for k,v in group.items():
+                print(k,len(v)) 
+                for vv in v:
+                    space_path[vv[0]]=int(k)
+            
+            centerList=clustering.cluster_centers_
+            self.tsne_space(space_fea,space_y,clustering.labels_,centerList)
+                        
+            
+            np.save('/hdd/sdd/lzq/DLMM_new/dataset/kmeans_space_path.npy',space_path)
+            np.save('/hdd/sdd/lzq/DLMM_new/dataset/kmeans_centerList.npy',centerList)
+        
+        return space_path,centerList
+
+    def tsne_space(self,space_fea,space_y,labels,centerList):
+        tsne_fea=TSNE().fit_transform(np.concatenate([space_fea,centerList],axis=0))
+        tsne_fea_list=[[],[],[]]
+        color=['red','green','blue']
+        for i in range(len(labels)):
+            tsne_fea_list[labels[i]].append(tsne_fea[i])
+        for i in range(3):
+            dots=np.array(tsne_fea_list[i])
+            plt.scatter(dots[:,0],dots[:,1],c=color[i])
+            plt.scatter([tsne_fea[-(3-i)][0]],[tsne_fea[-(3-i)][1]],c=color[i],s=1000,alpha=0.3)
+        plt.savefig('/hdd/sdd/lzq/DLMM_new/dataset/tsne_kmeans.jpg')
+        plt.cla()
+
+        # tsne_y_list=[[],[],[],[],[],[],[],[],[]]
+        # for i in range(len(labels)):
+        #     tsne_y_list[int(space_y[i]//0.1)].append(tsne_fea[i])
+        # for i in range(9):
+        #     dots_y=np.array(tsne_y_list[i])
+        plt.scatter(tsne_fea[:-3,0],tsne_fea[:-3,1],c=space_y//0.1*0.1,cmap="coolwarm")
+        plt.savefig('/hdd/sdd/lzq/DLMM_new/dataset/tsne_y.jpg')
+
 
 class TwoModel():
     def __init__(self,FaceModel:SingleModel,VoiceModel:SingleModel,CrossModel:Voice_Time_CrossAttention,regressor=None,biomodel=None):
@@ -726,3 +772,188 @@ class BioModel():
                 torch.save(state, savepath)
             self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
             print('  [Test] mae: %.03f sum_pro: %.03f [Best] mae: %.03f'% (testloss,sum_pro/cnt,self.testloss_best))
+
+class MultiExperts():
+    def __init__(self,modelList:List[SingleModel],modal,backbone:SingleModel):
+        self.modelList=modelList
+        for i in range(len(self.modelList)):
+            self.modelList[i].extractor.cuda()
+            self.modelList[i].time_extractor.cuda()
+            self.modelList[i].regressor.cuda()
+        self.modal=0 if modal=='face' else 1 if modal=='voice' else -1 if modal=='face_point' else 2
+
+        self.backbone=backbone
+        self.backbone.extractor.cuda()
+        self.backbone.time_extractor.cuda()
+        self.backbone.regressor.cuda()
+
+    def load_checkpoint(self,checkpointList,backboneCheckpoint,space_path,centerList):
+        for i in range(len(self.modelList)):
+            self.modelList[i].load_time_checkpoint(checkpointList[i])
+        self.backbone.load_time_checkpoint(backboneCheckpoint)
+        self.centerList=centerList
+        self.space_path=space_path
+        
+    def train_init(self,dataset,LR,WEIGHT_DELAY):
+        self.dataset=dataset
+        self.optimizerList = []
+        nets=[]
+        for i in range(len(self.modelList)):
+            nets+=[self.modelList[i].time_extractor,self.modelList[i].regressor]
+        opt=optim.Adam(chain(*[net.parameters() for net in nets]), lr=LR,weight_decay=WEIGHT_DELAY)
+        #self.optimizerList.append(opt)
+        self.optimizer=opt
+        self.testloss_best_list=[]
+        
+        self.train_criterion=nn.MSELoss()
+        self.test_criterion=nn.L1Loss()
+        self.test_criterion.requires_grad_ = False
+        self.testloss_best=1e5
+        self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
+
+    def train_forward(self,data,is_train,model:SingleModel):
+        xs,y=data.values()                
+        y = y.to(torch.float32).unsqueeze(1)
+        if is_train:
+            y = y + 0.1*torch.randn(y.size()[0],1)
+        y[y<0]=0
+        y = y.cuda()
+
+        features = []
+        with torch.no_grad():
+            for imgs in xs[self.modal]:
+                imgs=imgs.cuda()
+                _,fea,_=model.extractor(imgs)
+                features.append(fea)
+            features=torch.stack(features)
+        time_outputs,_=model.time_extractor(features)
+        outputs=model.regressor(time_outputs)
+
+        return outputs,y
+
+    def backbone_forward(self,xs):
+        features = []
+        with torch.no_grad():
+            for imgs in xs:
+                imgs=imgs.cuda()
+                _,fea,_=self.backbone.extractor(imgs)
+                features.append(fea)
+            features=torch.stack(features)
+            time_outputs,_=self.backbone.time_extractor(features)
+        return time_outputs
+
+    def GuassianDist(self,x,y):
+        eu_distance = -1*torch.norm(x-y) #负的欧式距离
+        gussian_distance = torch.exp(eu_distance)
+        return gussian_distance
+
+    def whichCluster(self,x):
+        dis_list=[]
+        self.backbone.extractor.eval()
+        self.backbone.time_extractor.eval()
+        x_fea=self.backbone_forward(x)
+        for i in range(len(self.modelList)):
+            dis=self.GuassianDist(x_fea.cpu(),torch.from_numpy(self.centerList[i]))
+            dis_list.append(dis)
+        weights=[]
+        for i in range(len(self.modelList)):
+            weights.append(dis_list[i]/sum(dis_list))
+        #maxn=1
+        max_id=weights.index(max(weights))
+        for i in range(len(self.modelList)):
+            weights[i]=1 if i==max_id else 0
+
+        return weights
+            
+    def train(self,EPOCH,savepath):
+        for epoch in range(EPOCH):
+            for i in range(len(self.modelList)):
+                self.modelList[i].extractor.eval()
+                self.modelList[i].time_extractor.train()
+                self.modelList[i].regressor.train()
+
+            bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train epoch {epoch}")
+            sum_loss_list=[0,0,0]
+            l1_loss_list = [0,0,0]
+            cnt_list=[0,0,0]
+            for data in self.dataset.train_dataloader:
+                if (data['xs'][0][0]).size()[0]<10:
+                    continue
+                model_id=self.space_path[data['xs'][-1][0]]
+                self.optimizer.zero_grad()
+                outputs,y=self.train_forward(data,is_train=True,model=self.modelList[model_id])
+                loss = self.train_criterion(outputs, y)
+                loss.backward()
+                self.optimizer.step()
+                sum_loss_list[model_id] += loss.item()
+                l1_loss_list[model_id] += self.test_criterion(outputs, y).item()
+                cnt_list[model_id]+=1
+                showdic={}
+                for i in range(len(self.modelList)):
+                    #showdic['loss'+str(i)]=sum_loss_list[i]/cnt_list[i] if cnt_list[i] else -1
+                    showdic['mae'+str(i)]=l1_loss_list[i]/cnt_list[i] if cnt_list[i] else -1
+                bar.set_postfix(**showdic)
+                bar.update(1)
+            bar.close()
+
+            for i in range(len(self.modelList)):
+                self.modelList[i].extractor.eval()
+                self.modelList[i].time_extractor.eval()
+                self.modelList[i].regressor.eval()
+
+            bar = tqdm(total=len(self.dataset.test_dataloader), desc=f"test epoch {epoch}")
+            cnt=0
+            l1_loss = 0.0
+            with torch.no_grad():
+                for data in self.dataset.test_dataloader:
+                    if (data['xs'][0][0]).size()[0]<10:
+                        continue
+                    weights=self.whichCluster(data['xs'][self.modal])
+                    outputs=0
+                    for i in range(len(self.modelList)):
+                        sub_outputs,y=self.train_forward(data,is_train=False,model=self.modelList[i])
+                        outputs+=weights[i]*sub_outputs
+                    l1_loss_sub = self.test_criterion(outputs, y).item()
+                    l1_loss +=l1_loss_sub
+                    cnt+=1
+                    self.test_hunxiao[int(y//0.1)].append(l1_loss_sub)
+
+                    bar.set_postfix(**{'mae': l1_loss / cnt})
+                    bar.update(1)
+            bar.close()
+
+            testloss=l1_loss / cnt
+            tmp=[]
+            for hunxiao in self.test_hunxiao:
+                if len(hunxiao):
+                    tmp.append(sum(hunxiao)/len(hunxiao))
+            self.test_hunxiao=tmp
+            print(self.test_hunxiao)
+            
+            if testloss < self.testloss_best:
+                self.testloss_best = testloss
+                save_modelList=[]
+                for i in range(len(self.modelList)):
+                    sub_save_modelList={}
+                    sub_save_modelList['extractor']= self.modelList[i].extractor.state_dict()
+                    sub_save_modelList['time_extractor']= self.modelList[i].time_extractor.state_dict()
+                    sub_save_modelList['regressor']= self.modelList[i].regressor.state_dict()
+                    save_modelList.append(sub_save_modelList)
+                save_backbone={}
+                save_backbone['extractor']= self.backbone.extractor.state_dict()
+                save_backbone['time_extractor']= self.backbone.time_extractor.state_dict()
+                save_backbone['regressor']= self.backbone.regressor.state_dict()
+
+                state = {
+                'modelList': save_modelList,
+                'backbone': save_backbone,
+                'loss':showdic,
+                'acc': self.testloss_best,
+                'test_hunxiao':self.test_hunxiao,
+                "centerList":self.centerList,
+                'space_path':self.space_path
+                }
+                torch.save(state, savepath)
+
+            self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
+            print('  [Test] mae: %.03f  [Best] mae: %.03f'% (testloss,self.testloss_best))

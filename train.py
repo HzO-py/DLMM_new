@@ -134,13 +134,27 @@ def bio_train(bio_modal,is_selfatt,is_pro):
     model.train_init(dataset,LR,WEIGHT_DELAY,[model.time_extractor,model.regressor,model.prototype],nn.MSELoss(),nn.L1Loss())
     model.time_extractor_train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME),is_selfatt=is_selfatt)
     
-def DBSCAN_train(modal,is_selfatt):
+def cluster_train(modal,is_selfatt):
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
     model=SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
     model.load_time_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
     model.train_init(dataset,LR,WEIGHT_DELAY,[model.extractor,model.time_extractor,model.regressor],nn.MSELoss(),nn.L1Loss())
-    model.feature_space(is_selfatt=is_selfatt)
+    return model.feature_space(is_selfatt=is_selfatt)
 
+def MultiExperts_train(modal):
+    space_path,centerList=cluster_train(modal,True)
+
+    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
+    modelList=[]
+    checkList=[]
+    for _ in range(3):
+        modelList.append(SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal))
+        checkList.append(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
+    backbone=SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
+    experts=MultiExperts(modelList,modal,backbone)
+    experts.load_checkpoint(checkList,torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),space_path,centerList)
+    experts.train_init(dataset,LR,WEIGHT_DELAY)
+    experts.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
 
 
 #voice_train()
@@ -150,4 +164,5 @@ def DBSCAN_train(modal,is_selfatt):
 #extractor_test(FACE_OR_VOICE)
 #extractor_train(FACE_OR_VOICE)
 #print(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["acc"])
-DBSCAN_train(FACE_OR_VOICE,is_selfatt=True)
+#cluster_train(FACE_OR_VOICE,is_selfatt=True)
+MultiExperts_train(FACE_OR_VOICE)
