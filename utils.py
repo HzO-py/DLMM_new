@@ -229,8 +229,8 @@ def getAllSample(root_path,label_path,version):
                 score_distribute[ageclass][int(label//0.1)]+=1
             if len(os.listdir(root_path_3))>0:
                 #找同标本不同模态voice
-                splits=root_path_3.split('/')
-                splits[0]='/'+splits[0]
+                splits=root_path_3.split('\\')
+                splits[0]='\\'+splits[0]
                 splits[-3]='voice'
                 sample_name=splits[-1].split('.')[0]
                 splits[-1]=sample_name+'.wav_fftnpy'

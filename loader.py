@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from utils import getSample,readCsv,fileFeatureExtraction,getFaceSample,getBioSample,extractGsr,npyStandard,getVoiceSample,getAllSample
 from torch.utils.data import Dataset,DataLoader
-from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHorizontalFlip,RandomVerticalFlip,Normalize,ColorJitter
+from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHorizontalFlip,RandomVerticalFlip,Normalize,ColorJitter,ToPILImage
 import random
 import os
 from models import Prototype,Classifier,ResNet18,cnn1d,VGG,Regressor
@@ -605,7 +605,7 @@ class AllDataset(Dataset):
                     img_one=self.load_img(os.path.join(item[0],img))
                     npypath=os.path.join(item[0],img)[:-3]+'npy'
                     angle=self.face_rotate_angle(npypath)
-                    img_one=rotate(img_one,angle)
+                    img_one=ToTensor()(rotate(ToPILImage()(img_one),angle))
                     voice_path=os.path.join(item[1],img)[:-3]+'npy'
                     if os.path.exists(voice_path):
                         imgs.append(img_one)

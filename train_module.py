@@ -896,7 +896,7 @@ class MultiExperts():
             for data in self.dataset.train_dataloader:
                 if (data['xs'][0][0]).size()[0]<10:
                     continue
-                model_id=self.space_path[data['xs'][-1][0]]
+                model_id=self.space_path[data['xs'][-1][0].replace("\\", "/")]
                 self.optimizer.zero_grad()
                 outputs_model_id,y,fea_model_id=self.train_forward(data,is_train=False,model=self.modelList[model_id])
                 outputs_model_total,y,fea_model_total=self.train_forward(data,is_train=False,model=self.modelList[-1])
