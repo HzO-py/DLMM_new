@@ -232,7 +232,7 @@ class SingleModel():
 
     def time_extractor_train(self,EPOCH,savepath,is_selfatt):
         self.extractor.eval()
-        for epoch in range(1):
+        for epoch in range(EPOCH):
             bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train epoch {epoch}")
             for net in self.train_nets:
                 net.train()
@@ -287,20 +287,20 @@ class SingleModel():
             self.test_hunxiao=tmp
             print(self.test_hunxiao)
             
-            # if testloss < self.testloss_best:
-            #     self.testloss_best = testloss
-            #     state = {
-            #     'extractor': self.extractor.state_dict(),
-            #     'time_extractor': self.time_extractor.state_dict(),
-            #     'regressor': self.regressor.state_dict(),
-            #     'acc': self.testloss_best,
-            # }
-            #     if self.prototype:
-            #         state['prototype']=self.prototype.state_dict()
-            #     torch.save(state, savepath)
+            if testloss < self.testloss_best:
+                self.testloss_best = testloss
+                state = {
+                'extractor': self.extractor.state_dict(),
+                'time_extractor': self.time_extractor.state_dict(),
+                'regressor': self.regressor.state_dict(),
+                'acc': self.testloss_best,
+            }
+                if self.prototype:
+                    state['prototype']=self.prototype.state_dict()
+                torch.save(state, savepath)
                 
-            # self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
-            # print('  [Test] mae: %.03f sum_pro: %.03f [Best] mae: %.03f'% (testloss,sum_pro/cnt,self.testloss_best))
+            self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
+            print('  [Test] mae: %.03f sum_pro: %.03f [Best] mae: %.03f'% (testloss,sum_pro/cnt,self.testloss_best))
 
     def feature_space(self,is_selfatt):
         bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train")
@@ -326,6 +326,7 @@ class SingleModel():
                     bar.update(1)
                 bar.close()
             space_fea=np.array(space_fea)
+            space_y=np.array(space_y)
             np.save('/hdd/sdd/lzq/DLMM_new/dataset/space_fea.npy',space_fea)
             np.save('/hdd/sdd/lzq/DLMM_new/dataset/space_y.npy',space_y)
             np.save('/hdd/sdd/lzq/DLMM_new/dataset/space_path.npy',np.array(space_path))
@@ -391,7 +392,7 @@ class SingleModel():
             plt.scatter(dots[:,0],dots[:,1],c=color[i])
             plt.scatter([tsne_fea[-(3-i)][0]],[tsne_fea[-(3-i)][1]],c=color[i],s=1000,alpha=0.3)
         plt.savefig('/hdd/sdd/lzq/DLMM_new/dataset/tsne_kmeans.jpg')
-        plt.cla()
+        plt.close()
 
         # tsne_y_list=[[],[],[],[],[],[],[],[],[]]
         # for i in range(len(labels)):
@@ -400,6 +401,7 @@ class SingleModel():
         #     dots_y=np.array(tsne_y_list[i])
         plt.scatter(tsne_fea[:-3,0],tsne_fea[:-3,1],c=space_y//0.1*0.1,cmap="coolwarm")
         plt.savefig('/hdd/sdd/lzq/DLMM_new/dataset/tsne_y.jpg')
+        plt.close()
 
 
 class TwoModel():
@@ -791,7 +793,7 @@ class MultiExperts():
         for i in range(len(self.modelList)):
             self.modelList[i].load_time_checkpoint(checkpointList[i])
         self.backbone.load_time_checkpoint(backboneCheckpoint)
-        self.centerList=centerList
+        self.centerList=[]
         self.space_path=space_path
         
     def train_init(self,dataset,LR,WEIGHT_DELAY):
@@ -829,7 +831,7 @@ class MultiExperts():
         time_outputs,_=model.time_extractor(features)
         outputs=model.regressor(time_outputs)
 
-        return outputs,y
+        return outputs,y,time_outputs
 
     def backbone_forward(self,xs):
         features = []
@@ -847,25 +849,39 @@ class MultiExperts():
         gussian_distance = torch.exp(eu_distance)
         return gussian_distance
 
-    def whichCluster(self,x):
+    def whichCluster(self,fea_list):
         dis_list=[]
-        self.backbone.extractor.eval()
-        self.backbone.time_extractor.eval()
-        x_fea=self.backbone_forward(x)
         for i in range(len(self.modelList)):
-            dis=self.GuassianDist(x_fea.cpu(),torch.from_numpy(self.centerList[i]))
+            dis=self.GuassianDist(fea_list[i],self.centerList[i])
             dis_list.append(dis)
         weights=[]
         for i in range(len(self.modelList)):
             weights.append(dis_list[i]/sum(dis_list))
         #maxn=1
-        max_id=weights.index(max(weights))
-        for i in range(len(self.modelList)):
-            weights[i]=1 if i==max_id else 0
+        # max_id=weights.index(max(weights))
+        # for i in range(len(self.modelList)):
+        #     weights[i]=1 if i==max_id else 0
 
         return weights
-            
+    
+    def loss_visualize(self,epoch, plt_loss_list):
+        epochs=[i for i in range(epoch+1)]
+        plt.style.use("ggplot")
+        plt.figure()
+        plt.title("Epoch_Loss")
+        plt.plot(epochs, plt_loss_list[0], label='red_loss', color='r', linestyle='-')
+        plt.plot(epochs, plt_loss_list[1], label='green_loss', color='g', linestyle='-')
+        plt.plot(epochs, plt_loss_list[2], label='blue_loss', color='b', linestyle='-')
+        plt.plot(epochs, plt_loss_list[3], label='total_loss', color='purple', linestyle='-')
+        plt.plot(epochs, plt_loss_list[-1], label='val_loss', color='y', linestyle='-')
+        plt.legend()
+        plt.xlabel('epoch')
+        plt.ylabel('loss')
+        plt.savefig('/hdd/sdd/lzq/DLMM_new/model/loss.jpg')
+        plt.close()
+
     def train(self,EPOCH,savepath):
+        plt_loss_list=[[],[],[],[],[]]
         for epoch in range(EPOCH):
             for i in range(len(self.modelList)):
                 self.modelList[i].extractor.eval()
@@ -873,21 +889,33 @@ class MultiExperts():
                 self.modelList[i].regressor.train()
 
             bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train epoch {epoch}")
-            sum_loss_list=[0,0,0]
-            l1_loss_list = [0,0,0]
-            cnt_list=[0,0,0]
+            sum_loss_list=[0,0,0,0]
+            l1_loss_list = [0,0,0,0]
+            cnt_list=[0,0,0,0]
+            fea_list=[[],[],[],[]]
             for data in self.dataset.train_dataloader:
                 if (data['xs'][0][0]).size()[0]<10:
                     continue
                 model_id=self.space_path[data['xs'][-1][0]]
                 self.optimizer.zero_grad()
-                outputs,y=self.train_forward(data,is_train=True,model=self.modelList[model_id])
-                loss = self.train_criterion(outputs, y)
+                outputs_model_id,y,fea_model_id=self.train_forward(data,is_train=False,model=self.modelList[model_id])
+                outputs_model_total,y,fea_model_total=self.train_forward(data,is_train=False,model=self.modelList[-1])
+                loss_model_id = self.train_criterion(outputs_model_id, y)
+                loss_model_total=self.train_criterion(outputs_model_total, y)
+                loss=loss_model_id+loss_model_total
                 loss.backward()
                 self.optimizer.step()
-                sum_loss_list[model_id] += loss.item()
-                l1_loss_list[model_id] += self.test_criterion(outputs, y).item()
+
+                fea_list[model_id].append(fea_model_id.squeeze(0).cpu())
+                sum_loss_list[model_id] += loss_model_id.item()
+                l1_loss_list[model_id] += self.test_criterion(outputs_model_id, y).item()
                 cnt_list[model_id]+=1
+
+                fea_list[-1].append(fea_model_total.squeeze(0).cpu())
+                sum_loss_list[-1] += loss_model_total.item()
+                l1_loss_list[-1]+=self.test_criterion(outputs_model_total, y).item()
+                cnt_list[-1]+=1
+
                 showdic={}
                 for i in range(len(self.modelList)):
                     #showdic['loss'+str(i)]=sum_loss_list[i]/cnt_list[i] if cnt_list[i] else -1
@@ -900,6 +928,9 @@ class MultiExperts():
                 self.modelList[i].extractor.eval()
                 self.modelList[i].time_extractor.eval()
                 self.modelList[i].regressor.eval()
+                
+                plt_loss_list[i].append(l1_loss_list[i]/cnt_list[i])
+                self.centerList.append(torch.stack(fea_list[i]).mean(axis=0,keepdim=False))
 
             bar = tqdm(total=len(self.dataset.test_dataloader), desc=f"test epoch {epoch}")
             cnt=0
@@ -908,11 +939,16 @@ class MultiExperts():
                 for data in self.dataset.test_dataloader:
                     if (data['xs'][0][0]).size()[0]<10:
                         continue
-                    weights=self.whichCluster(data['xs'][self.modal])
+                    outputs_list=[]
+                    fea_list=[]
+                    for i in range(len(self.modelList)):
+                        sub_outputs,y,fea=self.train_forward(data,is_train=False,model=self.modelList[i])
+                        outputs_list.append(sub_outputs)
+                        fea_list.append(fea.squeeze(0).cpu())
+                    weights=self.whichCluster(fea_list)
                     outputs=0
                     for i in range(len(self.modelList)):
-                        sub_outputs,y=self.train_forward(data,is_train=False,model=self.modelList[i])
-                        outputs+=weights[i]*sub_outputs
+                        outputs+=weights[i]*outputs_list[i]
                     l1_loss_sub = self.test_criterion(outputs, y).item()
                     l1_loss +=l1_loss_sub
                     cnt+=1
@@ -923,6 +959,7 @@ class MultiExperts():
             bar.close()
 
             testloss=l1_loss / cnt
+            plt_loss_list[-1].append(testloss)
             tmp=[]
             for hunxiao in self.test_hunxiao:
                 if len(hunxiao):
@@ -956,4 +993,7 @@ class MultiExperts():
                 torch.save(state, savepath)
 
             self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
+            self.centerList=[]
             print('  [Test] mae: %.03f  [Best] mae: %.03f'% (testloss,self.testloss_best))
+        
+            self.loss_visualize(epoch,plt_loss_list)

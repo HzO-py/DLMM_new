@@ -88,7 +88,7 @@ def time_extractor_train(modal,is_selfatt,is_pro):
     proto=Prototype(HIDDEN_NUM*2,HIDDEN_NUM,CLASS_NUM) if is_pro else None
     model=SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal,proto)
     model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
-    model.train_init(dataset,LR,WEIGHT_DELAY,[model.time_extractor,model.regressor,model.prototype],nn.MSELoss(),nn.L1Loss())
+    model.train_init(dataset,LR,WEIGHT_DELAY,[model.time_extractor,model.regressor],nn.MSELoss(),nn.L1Loss())
     model.time_extractor_train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME),is_selfatt=is_selfatt)
 
 def extractor_test(modal):
@@ -147,7 +147,7 @@ def MultiExperts_train(modal):
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
     modelList=[]
     checkList=[]
-    for _ in range(3):
+    for _ in range(4):
         modelList.append(SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal))
         checkList.append(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
     backbone=SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
@@ -159,7 +159,7 @@ def MultiExperts_train(modal):
 
 #voice_train()
 #three_train()
-#time_extractor_train(FACE_OR_VOICE,is_selfatt=True,is_pro=True)
+#time_extractor_train(FACE_OR_VOICE,is_selfatt=True,is_pro=False)
 #bio_train(BIO_MODAL,is_selfatt=True,is_pro=True)
 #extractor_test(FACE_OR_VOICE)
 #extractor_train(FACE_OR_VOICE)
