@@ -156,6 +156,14 @@ def MultiExperts_train(modal):
     experts.train_init(dataset,LR,WEIGHT_DELAY)
     experts.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
 
+def MultiExperts_test(modal):
+    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
+    modelList=[]
+    for _ in range(4):
+        modelList.append(SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal))
+    backbone=SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
+    experts=MultiExperts(modelList,modal,backbone)
+    experts.test(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),dataset)
 
 #voice_train()
 #three_train()
@@ -166,3 +174,4 @@ def MultiExperts_train(modal):
 #print(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["acc"])
 #cluster_train(FACE_OR_VOICE,is_selfatt=True)
 MultiExperts_train(FACE_OR_VOICE)
+#MultiExperts_test(FACE_OR_VOICE)

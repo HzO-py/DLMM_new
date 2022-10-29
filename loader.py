@@ -1,4 +1,5 @@
 from posixpath import split
+import time
 from cv2 import transform
 import torch
 import numpy as np
@@ -600,23 +601,33 @@ class AllDataset(Dataset):
         label=item[-1]
         angle=0
         if self.is_time:
-            for img in sorted(os.listdir(item[0]),key=lambda x:int(x.split('.')[0])):
-                if img.endswith('jpg'):
-                    img_one=self.load_img(os.path.join(item[0],img))
-                    npypath=os.path.join(item[0],img)[:-3]+'npy'
-                    angle=self.face_rotate_angle(npypath)
-                    img_one=ToTensor()(rotate(ToPILImage()(img_one),angle))
-                    voice_path=os.path.join(item[1],img)[:-3]+'npy'
-                    if os.path.exists(voice_path):
-                        imgs.append(img_one)
-                        npys.append(self.load_npy(voice_path))
-                        face_points.append(self.load_face_point(npypath))
-            imgs=torch.stack(imgs)
-            npys=torch.stack(npys)
-            face_points=torch.stack(face_points)
+            if not os.path.exists(os.path.join(item[0],'imgs.pt')):
+                for img in sorted(os.listdir(item[0]),key=lambda x:int(x.split('.')[0])):
+                    if img.endswith('jpg'):
+                        img_one=self.load_img(os.path.join(item[0],img))
+                        npypath=os.path.join(item[0],img)[:-3]+'npy'
+                        angle=self.face_rotate_angle(npypath)
+                        img_one=ToTensor()(rotate(ToPILImage()(img_one),angle))
+
+                        voice_path=os.path.join(item[1],img)[:-3]+'npy'
+                        if os.path.exists(voice_path):
+                            imgs.append(img_one)
+                            npys.append(self.load_npy(voice_path))
+                            face_points.append(self.load_face_point(npypath))
+                imgs=torch.stack(imgs)
+                npys=torch.stack(npys)
+                torch.save(imgs, os.path.join(item[0],'imgs.pt'))
+                torch.save(npys, os.path.join(item[1],'npys.pt'))
+                
+            else:
+                imgs=torch.load(os.path.join(item[0],'imgs.pt'))
+                npys=torch.load(os.path.join(item[1],'npys.pt'))
+            
+            #face_points=torch.stack(face_points)
             if self.modal==2:
                 bios=self.load_seq(item[2])
                 bios=torch.tensor(bios, dtype=torch.float)
+
 
         else:
             if self.modal==0:
