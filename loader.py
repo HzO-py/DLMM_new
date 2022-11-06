@@ -591,6 +591,11 @@ class AllDataset(Dataset):
             return False
         return True
     
+    def get_y_label(self):
+        y_label=[0,0,0,0,0,0,0,0,0,0]
+        for item in self.all_items:
+            y_label[int(item[-1]//0.1)]+=1
+        print(y_label)
 
     def __getitem__(self,idr):
         item=self.all_items[idr]
