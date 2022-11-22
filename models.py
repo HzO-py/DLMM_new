@@ -57,7 +57,7 @@ class VGG_regressor(nn.Module):
         #out = F.dropout(fea, p=0.5, training=self.training)
         #out = self.linear(out)
         return out,fea,None
-cnt=0
+
 class Resnet_regressor(nn.Module):
     def __init__(self,modal,is_gradcam=False):
         super(Resnet_regressor, self).__init__()
@@ -84,6 +84,23 @@ class Resnet_regressor(nn.Module):
 
         out=self.linear(fea)
         return out,fea,res
+
+class NoChange(nn.Module):#自定义类 继承nn.Module
+
+    def __init__(self):#初始化函数
+        super(NoChange, self).__init__()#继承父类初始化函数
+
+    def forward(self, x):
+        return x,x.transpose(0,1),x
+
+class ClusterCenter(nn.Module):
+    def __init__(self,hiddenNum):
+        super(ClusterCenter, self).__init__()
+        self.fc1 = nn.Linear(hiddenNum, 2, bias = False)
+
+    def forward(self, x):
+        centers = list(self.fc1.parameters())
+        return x,centers
 
 class Prototype(nn.Module):#自定义类 继承nn.Module
 

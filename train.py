@@ -34,8 +34,8 @@ BATCH_SIZE = cfg["BATCH_SIZE"]
 TCN_BATCH_SIZE=cfg["TCN_BATCH_SIZE"]
 LR=cfg["LR"]
 WEIGHT_DELAY=cfg["WEIGHT_DELAY"]
-FACE_OR_VOICE=cfg["FACE_OR_VOICE"]
-BIO_MODAL=cfg["BIO_MODAL"]
+MODAL=cfg["MODAL"]
+
 
 VGG_OR_RESNET=cfg["VGG_OR_RESNET"]
 EXTRACT_NUM=cfg["EXTRACT_NUM"]
@@ -53,6 +53,8 @@ AU_OUTPUT_SIZE=cfg["AU_OUTPUT_SIZE"]
 DATA_ROOT=cfg["DATA_ROOT"]
 MODEL_ROOT=cfg["MODEL_ROOT"]
 LOGS_ROOT=cfg["LOGS_ROOT"]
+CLUSTER_ROOT=cfg["CLUSTER_ROOT"]
+
 MODEL_NAME=cfg["MODEL_NAME"]
 MODEL_NAME2=cfg["MODEL_NAME2"]
 CHECKPOINT_NAME=cfg["CHECKPOINT_NAME"]
@@ -86,8 +88,10 @@ def time_extractor_train(modal,is_selfatt,is_pro):
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
     #extractor=VGG_regressor() if modal=='face' else Resnet_regressor(modal) if modal=='voice' else AU_extractor(AU_INPUT_SIZE,AU_HIDDEN_SIZE,AU_OUTPUT_SIZE)
     proto=Prototype(HIDDEN_NUM*2,HIDDEN_NUM,CLASS_NUM) if is_pro else None
-    model=SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal,proto)
-    model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
+    extractor=NoChange() if modal=='bio' else Resnet_regressor(modal)
+    model=SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal,proto)
+    if modal!='bio':
+        model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
     model.train_init(dataset,LR,WEIGHT_DELAY,[model.time_extractor,model.regressor],nn.MSELoss(),nn.L1Loss())
     model.time_extractor_train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME),is_selfatt=is_selfatt)
 
@@ -126,34 +130,29 @@ def three_train():
     model.train_init(dataset,LR,WEIGHT_DELAY,[model.regressor])
     model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)),bio_checkout=torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3)))
     model.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
-
-def bio_train(bio_modal,is_selfatt,is_pro):
-    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,'bio',is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
-    proto=Prototype(HIDDEN_NUM*2,HIDDEN_NUM,CLASS_NUM) if is_pro else None
-    model=BioModel(Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),bio_modal,proto)
-    model.train_init(dataset,LR,WEIGHT_DELAY,[model.time_extractor,model.regressor,model.prototype],nn.MSELoss(),nn.L1Loss())
-    model.time_extractor_train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME),is_selfatt=is_selfatt)
     
 def cluster_train(modal,is_selfatt):
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
-    return
-    model=SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
+    extractor=NoChange() if modal=='bio' else Resnet_regressor(modal)
+    cluster=ClusterCenter(HIDDEN_NUM*2)
+    model=SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal,cluster=cluster)
     model.load_time_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
-    model.train_init(dataset,LR,WEIGHT_DELAY,[model.extractor,model.time_extractor,model.regressor],nn.MSELoss(),nn.L1Loss())
-    return model.feature_space(is_selfatt=is_selfatt)
+    model.train_init(dataset,LR,WEIGHT_DELAY,[model.cluster],nn.MSELoss(),nn.L1Loss())
+    return model.feature_space(is_selfatt=is_selfatt,savepath=os.path.join(CLUSTER_ROOT,CHECKPOINT_NAME))
 
 def MultiExperts_train(modal,modelNum):
-    #space_path,centerList=cluster_train(modal,True)
+    space_path,centerList=cluster_train(modal,True)
 
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
     modelList=[]
     checkList=[]
+    extractor=NoChange() if modal=='bio' else Resnet_regressor(modal)
     for _ in range(modelNum):
-        modelList.append(SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal))
+        modelList.append(SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal))
         checkList.append(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
-    backbone=SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
+    backbone=SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
     experts=MultiExperts(modelList,backbone)
-    experts.load_checkpoint(checkList,torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
+    experts.load_checkpoint(checkList,torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),space_path=space_path)
     experts.train_init(dataset,LR,WEIGHT_DELAY)
     experts.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
 
@@ -168,25 +167,28 @@ def MultiExperts_test(modal,modelNum):
     experts.test()
 
 def Mul_MultiExperts_test(modelNum):
-    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,"face",is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
+    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,"bio",is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
     modelList=[]
     for _ in range(modelNum):
         modelList.append(SingleModel(Resnet_regressor("face"),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"face"))
     for _ in range(modelNum):
         modelList.append(SingleModel(Resnet_regressor("voice"),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"voice"))
+    for _ in range(modelNum):
+        modelList.append(SingleModel(NoChange(),Time_SelfAttention(3,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"bio"))
     backbone=SingleModel(Resnet_regressor("face"),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"face")
     experts=MultiExperts(modelList,backbone)
-    experts.mul_test_init(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)),dataset)
+    checkpointList=[torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3))]
+    experts.mul_test_init(checkpointList,dataset)
     experts.test()
 
 #voice_train()
 #three_train()
-#time_extractor_train(FACE_OR_VOICE,is_selfatt=True,is_pro=False)
+#time_extractor_train(MODAL,is_selfatt=True,is_pro=False)
 #bio_train(BIO_MODAL,is_selfatt=True,is_pro=True)
-#extractor_test(FACE_OR_VOICE)
-#extractor_train(FACE_OR_VOICE)
-#print(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["acc"])
-#cluster_train(FACE_OR_VOICE,is_selfatt=True)
-#MultiExperts_train(FACE_OR_VOICE,3)
-#MultiExperts_test(FACE_OR_VOICE,3)
-Mul_MultiExperts_test(3)
+#extractor_test(MODAL)
+#extractor_train(MODAL)
+#print(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["acc"],torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["test_hunxiao"])
+#cluster_train(MODAL,is_selfatt=True)
+MultiExperts_train(MODAL,2)
+#MultiExperts_test(MODAL,3)
+#Mul_MultiExperts_test(3)
