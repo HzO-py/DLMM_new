@@ -3,10 +3,10 @@ MODEL_ROOT: \hdd\sdd\lzq\DLMM_new\model
 LOGS_ROOT: \hdd\sdd\lzq\DLMM_new\model\logs
 CLUSTER_ROOT: \hdd\sdd\lzq\DLMM_new\model\cluster
 
-MODEL_NAME: experts_zd_face_v12.t7
+MODEL_NAME: experts_zd_face_4E_v12.t7
 MODEL_NAME2: voice_bio_v11.t7
 
-CHECKPOINT_NAME: face_time_epoch10_v11.t7
+CHECKPOINT_NAME: experts_zd_face_v12.t7
 CHECKPOINT_NAME2: experts_zd_voice_v11.t7
 CHECKPOINT_NAME3: experts_zd_bio_v11.t7
 CHECKPOINT_NAME4: experts_zd_face_v11.t7

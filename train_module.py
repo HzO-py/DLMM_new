@@ -1,4 +1,5 @@
 import csv
+import random
 from tkinter import W
 import torch
 import torch.nn as nn
@@ -315,7 +316,9 @@ class SingleModel():
             self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
             print('  [Test] mae: %.03f sum_pro: %.03f [Best] mae: %.03f'% (testloss,sum_pro/cnt,self.testloss_best))
 
-    def feature_space(self,is_selfatt,savepath):
+    def feature_space(self,is_selfatt,savepath,pre_space_path,model_id):
+        if not os.path.exists(savepath):
+            os.makedirs(savepath)
         bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"feature_space")
         for net in self.forward_nets:
             net.eval()
@@ -332,6 +335,8 @@ class SingleModel():
                 for data in self.dataset.train_dataloader:
                     if (data['xs'][0][0]).size()[0]<10:
                         continue
+                    if pre_space_path[data['xs'][-1][0]]!=model_id:
+                        continue
                     outputs,y,path=self.time_extractor_forward(data,is_train=False,is_selfatt=is_selfatt,is_dbscan=True)
                     space_fea.append(outputs.cpu().squeeze(0))
                     space_y.append(y.cpu().squeeze(0))
@@ -340,13 +345,13 @@ class SingleModel():
                 bar.close()
             space_fea=torch.stack(space_fea)
             space_y=torch.stack(space_y)
-            torch.save(torch.stack(space_fea),os.path.join(savepath,'space_fea.pt'))
-            torch.save(torch.stack(space_y),os.path.join(savepath,'space_y.pt'))
+            torch.save(space_fea,os.path.join(savepath,'space_fea.pt'))
+            torch.save(space_y,os.path.join(savepath,'space_y.pt'))
             np.save(os.path.join(savepath,'space_path.npy'),np.array(space_path))
-        return self.cluster_space(space_fea.cuda(),space_y.cuda(),space_path,savepath)
+        return self.cluster_space(space_fea.cuda(),space_y.cuda(),space_path,savepath,model_id)
         
 
-    def cluster_space(self,space_fea,space_y,space_path,savepath):
+    def cluster_space(self,space_fea,space_y,space_path,savepath,model_id):
         if os.path.exists(os.path.join(savepath,'cluster_centerList.npy')):
             space_path=np.load(os.path.join(savepath,'cluster_space_path.npy'), allow_pickle='TRUE')
             space_path=space_path.item()
@@ -358,7 +363,29 @@ class SingleModel():
             for net in self.forward_nets:
                 net.eval()
             
-            EPOCH_SIZE=1000
+            rand_fea=random.randint(0,space_fea.shape[0]-1)
+            maxn_dis=0
+            maxn_u=0
+            for i in range(space_fea.shape[0]):
+                dis=torch.norm(rand_fea-space_fea[i])
+                if maxn_dis<dis:
+                    maxn_dis=dis
+                    maxn_u=i
+            
+            maxn_v=maxn_u
+            maxn_dis=0
+            maxn_u=0
+            for i in range(space_fea.shape[0]):
+                dis=torch.norm(space_fea[i]-space_fea[maxn_v])
+                if maxn_dis<dis:
+                    maxn_dis=dis
+                    maxn_u=i
+            with torch.no_grad():
+                new_para=self.cluster.state_dict()
+                new_para['fc1.weight']=torch.stack([space_fea[maxn_u],space_fea[maxn_v]]).cuda()
+                self.cluster.load_state_dict(new_para)
+
+            EPOCH_SIZE=500
             bar = tqdm(total=EPOCH_SIZE, desc=f"cluster_space")
             for epoch in range(EPOCH_SIZE):
                 self.optimizer.zero_grad()
@@ -385,7 +412,7 @@ class SingleModel():
                     loss_y.append((space_y[i]-cluster_y[maxn_k])**2)
                     
                     cluster_labels[i]=maxn_k
-                    group[space_path[i][0]]=maxn_k
+                    group[space_path[i][0]]=maxn_k+model_id*2
                 
                 loss_center=[]
                 for k in range(2):
@@ -862,7 +889,7 @@ class MultiExperts():
         self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
 
     def train_forward(self,data,is_train,model:SingleModel):
-        backbone=self.modelList[0]
+        #backbone=self.modelList[0]
         xs,y=data.values()                
         y = y.to(torch.float32).unsqueeze(1)
         if is_train:
@@ -874,10 +901,10 @@ class MultiExperts():
         with torch.no_grad():
             for imgs in xs[model.modal]:
                 imgs=imgs.cuda()
-                _,fea,_=backbone.extractor(imgs)
+                _,fea,_=model.extractor(imgs)
                 features.append(fea)
             features=torch.stack(features)
-        time_outputs,_=backbone.time_extractor(features)
+        time_outputs,_=model.time_extractor(features)
         outputs=F.relu(model.regressor(time_outputs))
 
         return outputs,y,time_outputs
