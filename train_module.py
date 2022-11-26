@@ -316,7 +316,20 @@ class SingleModel():
             self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
             print('  [Test] mae: %.03f sum_pro: %.03f [Best] mae: %.03f'% (testloss,sum_pro/cnt,self.testloss_best))
 
-    def feature_space(self,is_selfatt,savepath,pre_space_path,model_id):
+    def loss_visualize(self,epoch, plt_loss_list,savepath):
+        epochs=[i for i in range(epoch+1)]
+        plt.style.use("ggplot")
+        plt.figure()
+        plt.title("Epoch_Loss")
+        plt.plot(epochs, plt_loss_list[0], label='y_std', color='r', linestyle='-')
+        plt.plot(epochs, plt_loss_list[1], label='center_std/2.0', color='g', linestyle='-')
+        plt.legend()
+        plt.xlabel('epoch')
+        plt.ylabel('loss')
+        plt.savefig(os.path.join(savepath,'loss.jpg'))
+        plt.close()
+
+    def feature_space(self,is_selfatt,savepath,pre_space_path,pre_model_id,model_id,sample_threshold,score_threshold,pre_score):
         if not os.path.exists(savepath):
             os.makedirs(savepath)
         bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"feature_space")
@@ -335,7 +348,7 @@ class SingleModel():
                 for data in self.dataset.train_dataloader:
                     if (data['xs'][0][0]).size()[0]<10:
                         continue
-                    if pre_space_path[data['xs'][-1][0]]!=model_id:
+                    if len(pre_space_path)>0 and pre_space_path[data['xs'][-1][0]]!=pre_model_id:
                         continue
                     outputs,y,path=self.time_extractor_forward(data,is_train=False,is_selfatt=is_selfatt,is_dbscan=True)
                     space_fea.append(outputs.cpu().squeeze(0))
@@ -348,14 +361,15 @@ class SingleModel():
             torch.save(space_fea,os.path.join(savepath,'space_fea.pt'))
             torch.save(space_y,os.path.join(savepath,'space_y.pt'))
             np.save(os.path.join(savepath,'space_path.npy'),np.array(space_path))
-        return self.cluster_space(space_fea.cuda(),space_y.cuda(),space_path,savepath,model_id)
+        return self.cluster_space(space_fea.cuda(),space_y.cuda(),space_path,savepath,model_id=model_id,sample_threshold=sample_threshold,score_threshold=score_threshold,pre_score=pre_score)
         
 
-    def cluster_space(self,space_fea,space_y,space_path,savepath,model_id):
+    def cluster_space(self,space_fea,space_y,space_path,savepath,model_id,sample_threshold,score_threshold,pre_score):
         if os.path.exists(os.path.join(savepath,'cluster_centerList.npy')):
             space_path=np.load(os.path.join(savepath,'cluster_space_path.npy'), allow_pickle='TRUE')
             space_path=space_path.item()
             centerList=np.load(os.path.join(savepath,'cluster_centerList.npy'))
+            num=1 if centerList.shape[0]<2 else 2
 
         else:
             for net in self.train_nets:
@@ -364,90 +378,116 @@ class SingleModel():
                 net.eval()
             
             rand_fea=random.randint(0,space_fea.shape[0]-1)
-            maxn_dis=0
-            maxn_u=0
-            for i in range(space_fea.shape[0]):
-                dis=torch.norm(rand_fea-space_fea[i])
-                if maxn_dis<dis:
-                    maxn_dis=dis
-                    maxn_u=i
+            rand_fea_2=random.randint(0,space_fea.shape[0]-1)
+            while torch.norm(space_fea[rand_fea]-space_fea[rand_fea_2])<1e-3:
+                rand_fea_2=random.randint(0,space_fea.shape[0]-1)
+            # dis_list=[]
+            # for i in range(space_fea.shape[0]):
+            #     dis=torch.norm(space_fea[rand_fea]-space_fea[i])
+            #     dis_list.append((float(dis),i))
+            # dis_list=sorted(dis_list,reverse=True,key=lambda x:x[0])
+            # rand_fea_2=random.randint(0,(space_fea.shape[0]-1)//2)
+            # rand_fea_2=dis_list[rand_fea_2][1]
+
+            # maxn_dis=0
+            # maxn_u=0
+            # for i in range(space_fea.shape[0]):
+            #     dis=torch.norm(space_fea[rand_fea]-space_fea[i])
+            #     if maxn_dis<dis:
+            #         maxn_dis=dis
+            #         maxn_u=i
             
-            maxn_v=maxn_u
-            maxn_dis=0
-            maxn_u=0
-            for i in range(space_fea.shape[0]):
-                dis=torch.norm(space_fea[i]-space_fea[maxn_v])
-                if maxn_dis<dis:
-                    maxn_dis=dis
-                    maxn_u=i
+            # maxn_v=maxn_u
+            # maxn_dis=0
+            # maxn_u=0
+            # for i in range(space_fea.shape[0]):
+            #     dis=torch.norm(space_fea[i]-space_fea[maxn_v])
+            #     if maxn_dis<dis:
+            #         maxn_dis=dis
+            #         maxn_u=i
+
             with torch.no_grad():
                 new_para=self.cluster.state_dict()
-                new_para['fc1.weight']=torch.stack([space_fea[maxn_u],space_fea[maxn_v]]).cuda()
+                new_para['fc1.weight']=torch.stack([space_fea[rand_fea],space_fea[rand_fea_2]]).cuda()
                 self.cluster.load_state_dict(new_para)
 
-            EPOCH_SIZE=500
+            num=2
+            EPOCH_SIZE=300
+            plt_loss_list=[[],[]]
             bar = tqdm(total=EPOCH_SIZE, desc=f"cluster_space")
             for epoch in range(EPOCH_SIZE):
                 self.optimizer.zero_grad()
                 loss_fea=[]
-                loss_y=[]
+                y_list=[[],[]]
+                fea_list=[[],[]]
                 cluster_labels=[0]*space_fea.shape[0]
-                cluster_y=[0,0]
                 group={}
-
-                _,center=self.cluster(space_fea[0])
-                with torch.no_grad():
-                    for k in range(2):
-                        cluster_y[k]=self.regressor(center[0][k].unsqueeze(0))
 
                 for i in range(space_fea.shape[0]):
                     fea,center=self.cluster(space_fea[i])
                     gussian_distance=[]
                     for k in range(2):
-                        eu_distance = -1*torch.norm(fea - center[0][k]) #负的欧式距离
-                        gussian_distance.append(torch.exp(eu_distance))
-                    maxn_k=0 if gussian_distance[0]>gussian_distance[1] else 1
-                    subloss=-torch.log(gussian_distance[maxn_k])-torch.log(1-gussian_distance[1-maxn_k])
+                        eu_distance = -1*torch.norm(fea - center[0][k]) #计算第k（k=0或1）个中心center[0][k]和当前第i个特征fea的负的欧式距离
+                        gussian_distance.append(torch.exp(eu_distance)) #gussian_distance越大，距离越小
+                    maxn_k=0 if gussian_distance[0]>gussian_distance[1] else 1 #看哪个中心离fea的距离近，记为maxn_k
+                    subloss=-torch.log(gussian_distance[maxn_k])-torch.log(1-gussian_distance[1-maxn_k]) #拉近离fea近的中心maxn_k，推远离fea远的中心1-maxn_k
                     loss_fea.append(subloss)
-                    loss_y.append((space_y[i]-cluster_y[maxn_k])**2)
                     
                     cluster_labels[i]=maxn_k
-                    group[space_path[i][0]]=maxn_k+model_id*2
-                
-                loss_center=[]
-                for k in range(2):
-                    _,center=self.cluster(space_fea[0])
-                    eu_distance = -1*torch.norm(center[0][k]-torch.mean(space_fea))
-                    gussian_distance=torch.exp(eu_distance)
-                    loss_center.append(-torch.log(1-gussian_distance))
-                loss_center=torch.mean(torch.stack(loss_center))
-                loss_y=torch.mean(torch.stack(loss_y))
-                loss_fea=torch.mean(torch.stack(loss_fea))
-                # for k in range(2):
-                #     y_std=torch.std(torch.stack(cluster_y[k]))
-                #     loss+=y_std
-                loss_weight=0.1
-                loss=loss_fea+loss_y+loss_center
+                    group[space_path[i][0]]=maxn_k+model_id
+                    y_list[maxn_k].append(space_y[i])
+                    fea_list[maxn_k].append(fea)
+
+                loss_fea=torch.stack(loss_fea).mean(axis=0,keepdim=False)
+                loss=loss_fea
                 loss.backward()
                 self.optimizer.step()
+
+                num=1 if min(len(y_list[0]),len(y_list[1]))<sample_threshold else 2
+
+                if num>1:
+                    y_std=0
+                    center_std=0
+                    inf=1e-9
+                    for k in range(2):
+                        center=torch.stack(fea_list[k]).mean(axis=0,keepdim=False)
+                        eu_distance = -1*torch.norm(center-space_fea.mean(axis=0,keepdim=False))
+                        gussian_distance=torch.exp(eu_distance)
+                        center_std+=float(1-gussian_distance)+inf
+
+                        y_std+=float(torch.std(torch.stack(y_list[k]),axis=0))
+
+                    # score=y_std/center_std
+                    # score_percent=(pre_score-score)/pre_score
+
+                    plt_loss_list[0].append(y_std)
+                    plt_loss_list[1].append(center_std/2.0)
+                    self.loss_visualize(epoch,plt_loss_list,savepath)
+
                 bar.set_postfix(**{'Loss': loss.cpu().item()})
                 bar.update(1)
             bar.close()
             
             _,centerList=self.cluster(space_fea[0])
             space_path=group
+            if num==1:
+                centerList=[space_fea.mean(axis=0,keepdim=False).unsqueeze(0)]
+                for key in space_path.keys():
+                    space_path[key]=model_id
 
             space_fea=space_fea.cpu().detach().numpy()
             space_y=space_y.cpu().detach().numpy()
             cluster_labels=np.array(cluster_labels)
             centerList=centerList[0].cpu().detach().numpy()
-            self.tsne_space(space_fea,space_y,cluster_labels,centerList,savepath)
+
+            if num>1:
+                self.tsne_space(space_fea,space_y,cluster_labels,centerList,savepath)
                             
                 
             np.save(os.path.join(savepath,'cluster_space_path.npy'),space_path)
             np.save(os.path.join(savepath,'cluster_centerList.npy'),centerList)
         
-        return space_path,centerList
+        return space_path,num
 
     def tsne_space(self,space_fea,space_y,labels,centerList,savepath):
         #tsne_fea=TSNE().fit_transform(np.concatenate([space_fea,centerList],axis=0))
@@ -849,22 +889,16 @@ class BioModel():
             print('  [Test] mae: %.03f sum_pro: %.03f [Best] mae: %.03f'% (testloss,sum_pro/cnt,self.testloss_best))
 
 class MultiExperts():
-    def __init__(self,modelList:List[SingleModel],backbone:SingleModel):
+    def __init__(self,modelList:List[SingleModel]):
         self.modelList=modelList
         for i in range(len(self.modelList)):
             self.modelList[i].extractor.cuda()
             self.modelList[i].time_extractor.cuda()
             self.modelList[i].regressor.cuda()
 
-        self.backbone=backbone
-        self.backbone.extractor.cuda()
-        self.backbone.time_extractor.cuda()
-        self.backbone.regressor.cuda()
-
-    def load_checkpoint(self,checkpointList,backboneCheckpoint,space_path=None,centerList=None):
+    def load_checkpoint(self,checkpointList,space_path=None,centerList=None):
         for i in range(len(self.modelList)):
             self.modelList[i].load_time_checkpoint(checkpointList[i])
-        self.backbone.load_time_checkpoint(backboneCheckpoint)
         self.centerList=[]
         self.stdList=[]
         self.space_path=[0,0,1,1,1,1,2,2,2]
@@ -908,19 +942,6 @@ class MultiExperts():
         outputs=F.relu(model.regressor(time_outputs))
 
         return outputs,y,time_outputs
-
-    def backbone_forward(self,xs):
-        self.backbone.extractor.eval()
-        self.backbone.time_extractor.eval()
-        features = []
-        with torch.no_grad():
-            for imgs in xs:
-                imgs=imgs.cuda()
-                _,fea,_=self.backbone.extractor(imgs)
-                features.append(fea)
-            features=torch.stack(features)
-            time_outputs,_=self.backbone.time_extractor(features)
-        return time_outputs
 
     def GuassianDist(self,x,y,s):
         eu_distance = -1*torch.norm((x-y)/s) #负的欧式距离
@@ -967,11 +988,6 @@ class MultiExperts():
             self.modelList[i].time_extractor.eval()
             self.modelList[i].regressor.eval()
 
-        self.backbone.load_time_checkpoint(checkpoint["backbone"])
-        self.backbone.extractor.eval()
-        self.backbone.time_extractor.eval()
-        self.backbone.regressor.eval()
-
         self.centerList=checkpoint["centerList"]
         self.stdList=checkpoint["stdList"]
         self.dataset=dataset
@@ -998,11 +1014,6 @@ class MultiExperts():
         for i in range(len(self.modelList)):
             tmp.append(self.loss[i]/sum(self.loss)*len(self.modelList))
         self.loss=tmp
-
-        self.backbone.load_time_checkpoint(checkpointList[0]["backbone"])
-        self.backbone.extractor.eval()
-        self.backbone.time_extractor.eval()
-        self.backbone.regressor.eval()
 
         self.centerList=[]
         self.stdList=[]
@@ -1059,7 +1070,7 @@ class MultiExperts():
         print(l1_loss / cnt,self.test_hunxiao)
 
     def train(self,EPOCH,savepath):
-        plt_loss_list=[[],[],[],[],[]]
+        plt_loss_list=[[],[],[],[],[],[],[],[],[]]
         for epoch in range(EPOCH):
             for i in range(len(self.modelList)):
                 self.modelList[i].extractor.eval()
@@ -1067,10 +1078,11 @@ class MultiExperts():
                 self.modelList[i].regressor.train()
 
             bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train epoch {epoch}")
-            sum_loss_list=[0,0,0,0]
-            l1_loss_list = [0,0,0,0]
-            cnt_list=[0,0,0,0]
-            fea_list=[[],[],[],[]]
+            sum_loss_list=[0,0,0,0,0,0,0,0]
+            l1_loss_list = [0,0,0,0,0,0,0,0]
+            cnt_list=[0,0,0,0,0,0,0,0]
+            fea_list=[[],[],[],[],[],[],[],[]]
+            y_list=[[],[],[],[],[],[],[],[]]
             for data in self.dataset.train_dataloader:
                 if (data['xs'][0][0]).size()[0]<10:
                     continue
@@ -1086,6 +1098,7 @@ class MultiExperts():
                 self.optimizer.step()
                 
                 fea_list[model_id].append(fea_model_id.squeeze(0))
+                y_list[model_id].append(y)
                 sum_loss_list[model_id] += loss_model_id.item()
                 l1_loss_list[model_id] += self.test_criterion(outputs_model_id, y).item()
                 cnt_list[model_id]+=1
@@ -1108,6 +1121,13 @@ class MultiExperts():
                 
             bar.close()
 
+            space_fea=[]
+            for i in range(len(self.modelList)):
+                space_fea+=fea_list[i]
+            space_fea=torch.stack(space_fea)
+
+            y_std=0
+            center_std=0
             for i in range(len(self.modelList)):
                 self.modelList[i].extractor.eval()
                 self.modelList[i].time_extractor.eval()
@@ -1115,12 +1135,20 @@ class MultiExperts():
                 
                 plt_loss_list[i].append(l1_loss_list[i]/cnt_list[i])
 
-                if 1:
-                    inf=1e-9
-                    center_total=torch.stack(fea_list[i]).mean(axis=0,keepdim=False)
-                    std_total=torch.std(torch.stack(fea_list[i]),axis=0)+inf
-                    self.centerList.append(center_total)
-                    self.stdList.append(std_total)
+                inf=1e-9
+                center_total=torch.stack(fea_list[i]).mean(axis=0,keepdim=False)
+                std_total=torch.std(torch.stack(fea_list[i]),axis=0)+inf
+                self.centerList.append(center_total)
+                self.stdList.append(std_total)
+
+                center=torch.stack(fea_list[i]).mean(axis=0,keepdim=False)
+                eu_distance = -1*torch.norm(center-space_fea.mean(axis=0,keepdim=False))
+                gussian_distance=torch.exp(eu_distance)
+                center_std+=float(1-gussian_distance)+inf
+
+                y_std+=float(torch.std(torch.stack(y_list[i]),axis=0))
+
+            score=y_std/center_std
 
             bar = tqdm(total=len(self.dataset.test_dataloader), desc=f"test epoch {epoch}")
             cnt=0
@@ -1167,20 +1195,16 @@ class MultiExperts():
                     sub_save_modelList['time_extractor']= self.modelList[i].time_extractor.state_dict()
                     sub_save_modelList['regressor']= self.modelList[i].regressor.state_dict()
                     save_modelList.append(sub_save_modelList)
-                save_backbone={}
-                save_backbone['extractor']= self.backbone.extractor.state_dict()
-                save_backbone['time_extractor']= self.backbone.time_extractor.state_dict()
-                save_backbone['regressor']= self.backbone.regressor.state_dict()
 
                 state = {
                 'modelList': save_modelList,
-                'backbone': save_backbone,
                 'loss':showdic,
                 'acc': self.testloss_best,
                 'test_hunxiao':self.test_hunxiao,
                 "centerList":self.centerList,
                 "stdList":self.stdList,
-                'space_path':self.space_path
+                'space_path':self.space_path,
+                'score':score
                 }
                 torch.save(state, savepath)
 

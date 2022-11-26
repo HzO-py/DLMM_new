@@ -67,6 +67,9 @@ DATA_PATHS=cfg["DATA_PATHS"]
 PIC_SIZE=cfg["PIC_SIZE"]
 IS_POINT=cfg["IS_POINT"]
 
+SAMPLE_THRESHOLD=cfg["SAMPLE_THRESHOLD"]
+SCORE_THRESHOLD=cfg["SCORE_THRESHOLD"]
+
 def extractor_train(modal):
     dataset=DataSet(BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=False,collate_fn=None,pic_size=PIC_SIZE)
     extractor=Resnet_regressor(modal)
@@ -131,37 +134,73 @@ def three_train():
     model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)),bio_checkout=torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3)))
     model.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
     
-def cluster_train(modal,is_selfatt,checkpoint,model_id):
+def cluster_train(modal,is_selfatt,checkpoint,pre_model_id,model_id,pre_score,save_cluster):
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
     extractor=NoChange() if modal=='bio' else Resnet_regressor(modal)
     cluster=ClusterCenter(HIDDEN_NUM*2)
     model=SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal,cluster=cluster)
-    model.load_time_checkpoint(checkpoint["modelList"][model_id])
+    model.load_time_checkpoint(checkpoint["modelList"][pre_model_id])
     model.train_init(dataset,LR,WEIGHT_DELAY,[model.cluster],nn.MSELoss(),nn.L1Loss())
-    return model.feature_space(is_selfatt=is_selfatt,savepath=os.path.join(os.path.join(CLUSTER_ROOT,CHECKPOINT_NAME),str(model_id)),pre_space_path=checkpoint['space_path'],model_id=model_id)
+    return model.feature_space(is_selfatt=is_selfatt,savepath=os.path.join(save_cluster,str(pre_model_id)),pre_space_path=checkpoint['space_path'],pre_model_id=pre_model_id,model_id=model_id,sample_threshold=SAMPLE_THRESHOLD,score_threshold=SCORE_THRESHOLD,pre_score=pre_score)
 
-def MultiExperts_train(modal,modelNum):
-    space_path={}
-    centerList=[]
-    for i in range(modelNum//2):
-        space_path_sub,centerList_sub=cluster_train(modal,True,torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),i)
-        space_path.update(space_path_sub)
-        centerList+=centerList_sub.tolist()
-    centerList=np.array(centerList)
-
+def MultiExperts_train(modal):
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
+    extractor=NoChange() if modal=='bio' else Resnet_regressor(modal)
+
+    checkpoint=torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))
+    checkpoint["modelList"]=[{"extractor":checkpoint["extractor"],"time_extractor":checkpoint["time_extractor"],"regressor":checkpoint["regressor"]}]
+    checkpoint["score"]=1e3
+    checkpoint['space_path']={}
+
+    cnt=0
+
+    while 1:
+        if cnt>=3:
+            break
+
+        print("---------------------Generation:",cnt)
+        space_path={}  
+        modelList=[]
+        checkList=[]
+        save_model=os.path.join(LOGS_ROOT,MODEL_NAME+str(cnt)+"G.t7")
+        save_cluster=os.path.join(CLUSTER_ROOT,MODEL_NAME+str(cnt)+"G.t7")
+
+        for i in range(len(checkpoint["modelList"])):
+            space_path_sub,num=cluster_train(modal,is_selfatt=True,checkpoint=checkpoint,pre_model_id=i,model_id=len(modelList),pre_score=checkpoint["score"],save_cluster=save_cluster)
+            space_path.update(space_path_sub)
+            for _ in range(num):
+                modelList.append(SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal))
+                checkList.append(checkpoint["modelList"][i])
+
+        if len(modelList)==len(checkpoint["modelList"]):
+            break
+        
+        experts=MultiExperts(modelList)
+        experts.load_checkpoint(checkList,space_path=space_path)
+        experts.train_init(dataset,LR,WEIGHT_DELAY)
+        experts.train(EPOCH,save_model)
+        checkpoint=torch.load(save_model)
+        cnt+=1
+
+def MultiExperts_checkpoint_train(modal):
+    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
+    extractor=NoChange() if modal=='bio' else Resnet_regressor(modal)
+
+    checkpoint=torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))
+
     modelList=[]
     checkList=[]
-    extractor=NoChange() if modal=='bio' else Resnet_regressor(modal)
-    for i in range(modelNum//2):
-        for j in range(2):
-            modelList.append(SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal))
-            checkList.append(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["modelList"][i])
-    backbone=SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
-    experts=MultiExperts(modelList,backbone)
-    experts.load_checkpoint(checkList,checkList[0],space_path=space_path)
+    save_model=os.path.join(LOGS_ROOT,CHECKPOINT_NAME)
+
+    for i in range(len(checkpoint["modelList"])):
+        modelList.append(SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal))
+        checkList.append(checkpoint["modelList"][i])
+    
+    experts=MultiExperts(modelList)
+    experts.load_checkpoint(checkList,space_path=checkpoint["space_path"])
     experts.train_init(dataset,LR,WEIGHT_DELAY)
-    experts.train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
+    experts.testloss_best=checkpoint["acc"]
+    experts.train(EPOCH,save_model)
 
 def MultiExperts_test(modal,modelNum):
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
@@ -194,8 +233,9 @@ def Mul_MultiExperts_test(modelNum):
 #bio_train(BIO_MODAL,is_selfatt=True,is_pro=True)
 #extractor_test(MODAL)
 #extractor_train(MODAL)
-print(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["acc"],torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["test_hunxiao"])
+#print(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["acc"],torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["test_hunxiao"])
 #cluster_train(MODAL,is_selfatt=True)
-#MultiExperts_train(MODAL,4)
+MultiExperts_train(MODAL)
+#MultiExperts_checkpoint_train(MODAL)
 #MultiExperts_test(MODAL,3)
 #Mul_MultiExperts_test(3)
