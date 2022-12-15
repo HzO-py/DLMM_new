@@ -5,7 +5,7 @@ import torch
 import numpy as np
 from PIL import Image
 from utils import getSample,readCsv,fileFeatureExtraction,getFaceSample,getBioSample,extractGsr,npyStandard,getVoiceSample,getAllSample
-from torch.utils.data import Dataset,DataLoader
+from torch.utils.data import Dataset,DataLoader,WeightedRandomSampler
 from torchvision.transforms import ToTensor, Resize, RandomCrop,Compose,RandomHorizontalFlip,RandomVerticalFlip,Normalize,ColorJitter,ToPILImage
 import random
 import os
@@ -46,141 +46,145 @@ class BioDataset(Dataset):
         
    
 class FaceDataset(Dataset):
-    def __init__(self,train,train_rio,paths,is_person,tcn_num=1,person_test=0):
-        self.train=train
-        self.is_person=is_person
+    def __init__(self,is_train,train_rio,paths,modal,is_time,pic_size,time_step=15):
+        self.is_time=is_time
+        self.is_train=is_train
+        self.modal=0
+        self.all_items=[]
         self.items=[]
-        self.person_test=person_test
-
+        self.pic_transform = Compose([
+                Resize([pic_size,pic_size]),
+                ToTensor()])
         for path in paths:
-            self.items+=getFaceSample(path[0],path[1],path[2])
+            self.all_items+=getAllSample(*path)
+        self.train_rio=int(len(self.all_items)*train_rio)
+        self.all_items=self.all_items[:self.train_rio] if is_train else self.all_items[self.train_rio:]
 
-        self.train_rio=int(len(self.items)*train_rio)
+        if not is_time:
+            houzhui='jpg'
+            for item in self.all_items:
+                for img in sorted(os.listdir(item[0]),key=lambda x:int(x.split('.')[0])):
+                    if img.endswith(houzhui):
+                        self.items.append([os.path.join(item[0],img),item[-1]])
+            self.all_items=self.items
 
-        transform1=Compose([Resize([108,108]),RandomCrop([96,96]),RandomHorizontalFlip(),RandomVerticalFlip(),ToTensor()])
-        transform2=Compose([Resize([96,96]),ToTensor()])
-
-
-        if train:
-            self.items=self.items[:self.train_rio]
-            self.transform =transform1
         else:
-            self.items=self.items[self.train_rio:]
-            self.transform = transform2
-        items=[]
-        itemss=[]
-        
-        if not is_person:
-            for person in self.items:
-                for img in person:
-                    items.append(img)
-            self.items=items
-        else:
-            self.transform = transform2
-                        
-            for person in self.items:
-                i=0
-                LEN=len(person)
+            houzhui='jpg'
+            for item in self.all_items:
+                person_item=[]
+                latest_time=int(sorted(os.listdir(item[0]),key=lambda x:int(x.split('.')[0]))[-1][:-4])
+                for i in range(0,latest_time+1,time_step):
+                    time_item=[]
+                    for j in range(i,i+time_step):
+                        img=os.path.join(item[0],str(j)+'.'+houzhui)
+                        if not os.path.exists(img):
+                            break
+                        time_item.append(img)
+                    if len(time_item)==time_step:
+                        if is_train:
+                            self.items.append([time_item,item[-1]])
+                        else:
+                            person_item.append(time_item)
+                if len(person_item)>0 and not is_train:
+                    self.items.append([person_item,item[-1]])
+            self.all_items=self.items      
 
-                while i<LEN:
-                    item=[]
-                    choose_num=[x for x in range(i,i+min(tcn_num,LEN-i))]
-                    if (LEN-i)<tcn_num:
-                        for _ in range(tcn_num-(LEN-i)):
-                            randint=random.randint(i,LEN-1)
-                            choose_num.append(randint)
-                        choose_num.sort()
+        if is_train:
+            self.all_items.sort(key=lambda x:float(x[-1]))
+            self.y_label=self.get_y_label()[:-1]
+            self.y_weight=[]
+            for i in range(len(self.y_label)):
+                self.y_weight.append(sum(self.y_label)/self.y_label[i])
 
-                    for k in choose_num:
-                        item.append(person[k])
-                    items.append(item)
+    def get_sampler(self):
+        weights=torch.Tensor([])
+        for i in range(len(self.y_label)):
+            tensor=torch.ones(self.y_label[i],dtype=torch.float16)*self.y_weight[i]
+            weights=torch.cat([weights,tensor],dim=0)
+        a=min(self.y_label)*len(self.y_label)
+        return WeightedRandomSampler(weights, min(self.y_label)*len(self.y_label),replacement=False)
 
-                    i+=tcn_num
+    def __len__(self):
+        if self.is_train:
+            return min(self.y_label)*len(self.y_label)
+        return len(self.all_items)
 
-                if person_test:
-                    itemss.append(items)
-                    items=[]
-
-
-        # if self.train:
-        #     classnum=[0]*5
-        #     classdiv=[[]]*5
-        #     for item in items:
-        #         whichone=int(min(4,item[0][-1]//0.2))
-        #         classnum[whichone]+=1
-        #         classdiv[whichone].append(item)
-
-        #     MAXNNUM=max(classnum)
-        #     for i in range(5):
-        #         for _ in range(MAXNNUM-classnum[i]):
-        #             items.append(classdiv[i][random.randint(0,classnum[i]-1)])
-
-        self.items=items
-        if person_test:
-            self.items=itemss
-        print(len(self.items))
-
-    def load_img(self,file_path,hf=0.0,vf=0.0):
+    def load_img(self,file_path):
         img = Image.open(file_path)
-        
-        img=self.transform(img)
-        if hf>0.5:
-            img=tf.hflip(img)
-        if vf>0.5:
-            img=tf.vflip(img)
+        img = self.pic_transform(img)
+        npypath=file_path[:-3]+'npy'
+        angle=self.face_rotate_angle(npypath)
+        img=ToTensor()(rotate(ToPILImage()(img),angle))
         return img
 
     def load_npy(self,file_path):
-        # npy=np.load(file_path)
-        # npy=npyStandard(npy)
-        # npy=torch.from_numpy(npy)
-        # npy=npy.to(torch.float32)
-        npy=torch.tensor([0], dtype=torch.int)
+        npy=np.load(file_path)
+        npy=torch.from_numpy(npy)
+        npy=torch.unsqueeze(npy, 0)
+        npy=npy.to(torch.float32)/-100.0
         return npy
 
-    def __len__(self):
-        return len(self.items)
+    def dis(self,p1,p2):
+        ans=0
+        for i in range(p1.shape[0]):
+            ans+=(p1[i]-p2[i])**2
+        return sqrt(ans)
 
-    def __getitem__(self, idr):
-        item=self.items[idr]
+    def dotproduct(self,p1,p2):
+        ans=0
+        for i in range(p1.shape[0]):
+            ans+=p1[i]*p2[i]
+        return ans
+
+    def angle(self,p1,p2,p3):
+        return acos(self.dotproduct(p1-p2,p1-p3)/(self.dis(p1,p2)*self.dis(p1,p3)))
+
+    def face_rotate_angle(self,file_path):
+        npy=np.load(file_path)
+        angle=acos(self.dotproduct(npy[8][:2]-npy[27][:2],np.array([0,1]))/self.dis(npy[8][:2],npy[27][:2]))
+        if (npy[8][:2]-npy[27][:2])[0]>0:
+            angle=2.0*pi-angle
+        return angle/pi*180
+    
+    def get_y_label(self):
+        y_label=[0,0,0,0,0,0,0,0,0,0]
+        for item in self.all_items:
+            y_label[int(item[-1]//0.1)]+=1
+        print(y_label)
+        return y_label
+
+    def get_pt(self,time_item):
+        save_path=time_item[0][:-3]+"pt"
+        if os.path.exists(save_path):
+            return torch.load(save_path)
         imgs=[]
-        npys=[]
-        label=0.0
-        sample = None
-        if not self.is_person:
-            img=self.load_img(item[0])
-            npy=self.load_npy(item[1])
-            sample = {'x1': img,'x2':npy,'y':item[-1]}
-        else:
-            if not self.person_test:
-                hf,vf=0.0,0.0
-                if self.train:
-                    hf=random.random()
-                    vf=random.random()
-                for it in item:
-                    imgs.append(self.load_img(it[0],hf,vf))
-                    npys.append(self.load_npy(it[1]))
-                    label=it[-1]
-                imgs=torch.stack(imgs)
-                npys=torch.stack(npys)
-                sample = {'x1': imgs,'x2':npys,'y':label}
-            else:
-                imgss=[]
-                npyss=[]
-                for ite in item:
-                    imgs=[]
-                    npys=[]
-                    for it in ite:
-                        imgs.append(self.load_img(it[0]))
-                        npys.append(self.load_npy(it[1]))
-                        label=it[-1]
-                    imgs=torch.stack(imgs)
-                    npys=torch.stack(npys)
-                    imgss.append(imgs)
-                    npyss.append(npys)
-                sample = {'x1': imgss,'x2':npyss,'y':label}
-        return sample
+        for item in time_item:
+            imgs.append(self.load_img(item))
+        imgs=torch.stack(imgs)
+        torch.save(imgs,save_path)
+        return imgs
 
+    def __getitem__(self,idr):
+        item=self.all_items[idr]
+        imgs=[]
+        label=item[-1]
+        path=""
+        if self.is_time:
+            if self.is_train:
+                imgs=self.get_pt(item[0])
+                path=item[0]
+            else:
+                for it in item[0]:
+                    imgs.append(self.get_pt(it))
+                path=item[0][0]
+                imgs=torch.stack(imgs)
+
+        else:
+            imgs=self.load_img(item[0])
+            path=item[0]
+
+        return {'xs': [imgs,path],'y':label}
+        
 class VoiceDataset(Dataset):
     def __init__(self,train,train_rio,paths,is_person,tcn_num=1,person_test=0):
         self.train=train
@@ -450,17 +454,9 @@ class AllDataset(Dataset):
         self.all_items=[]
         self.fv_items=[]
         self.items=[]
-        if is_train and not is_time:
-            self.pic_transform = Compose([
-                        Resize([pic_size,pic_size]),
-                        # RandomHorizontalFlip(),
-                        # RandomVerticalFlip(),
-                        # ColorJitter(0.1,0.1,0.1,0.1),
-                        ToTensor()])
-        else:
-            self.pic_transform = Compose([
-                    Resize([pic_size,pic_size]),
-                    ToTensor()])
+        self.pic_transform = Compose([
+                Resize([pic_size,pic_size]),
+                ToTensor()])
         for path in paths:
             self.all_items+=getAllSample(*path)
         for sample in self.all_items:

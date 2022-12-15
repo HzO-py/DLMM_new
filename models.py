@@ -85,6 +85,15 @@ class Resnet_regressor(nn.Module):
         out=self.linear(fea)
         return out,fea,res
 
+#like huajun
+# def count_parameters(model):
+#     return sum(p.numel() for p in model.parameters() if p.requires_grad)   
+# import torchsummary
+# model = Resnet_regressor('face').cuda()
+# torchsummary.summary(model, (3, 224, 224))
+# print('parameters_count:',count_parameters(model))
+#like huajun
+
 class NoChange(nn.Module):#自定义类 继承nn.Module
 
     def __init__(self):#初始化函数
@@ -94,9 +103,9 @@ class NoChange(nn.Module):#自定义类 继承nn.Module
         return x,x.transpose(0,1),x
 
 class ClusterCenter(nn.Module):
-    def __init__(self,hiddenNum):
+    def __init__(self,hiddenNum,cluster_num):
         super(ClusterCenter, self).__init__()
-        self.fc1 = nn.Linear(hiddenNum, 2, bias = False)
+        self.fc1 = nn.Linear(hiddenNum, cluster_num, bias = False)
 
     def forward(self, x):
         centers = list(self.fc1.parameters())
@@ -148,6 +157,23 @@ class Regressor(nn.Module):# 最终的分类器，用于输出预测概率
         # fea = F.selu(x)
         out = self.fc3(x)
         return out
+
+class Regressor2(nn.Module):# 最终的分类器，用于输出预测概率
+
+    def __init__(self,inputNum,hiddenNum):#初始化函数
+        super(Regressor2, self).__init__()#继承父类初始化函数
+        self.fc1 = nn.Linear(inputNum, hiddenNum)
+        self.fc2 = nn.Linear(hiddenNum, hiddenNum)
+        self.fc3 = nn.Linear(hiddenNum, 1)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = F.selu(x)
+        x = self.fc2(x)
+        x = F.selu(x)
+        x = self.fc3(x)
+        out=torch.sigmoid(x)
+        return x
 
 class Regressor_self_att(nn.Module):# 最终的分类器，用于输出预测概率
     def __init__(self,inputNum,hiddenNum_1, hiddenNum_2,is_droup):#初始化函数

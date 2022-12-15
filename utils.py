@@ -227,6 +227,7 @@ def getAllSample(root_path,label_path,version):
             root_path_3=os.path.join(root_path_2,video)
             if ageclass!=-1:
                 score_distribute[ageclass][int(label//0.1)]+=1
+            #samples.append([root_path_3,label])
             if len(os.listdir(root_path_3))>0:
                 #找同标本不同模态voice
                 splits=root_path_3.split('\\')

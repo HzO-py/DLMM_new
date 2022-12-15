@@ -6,8 +6,12 @@ import numpy as np
 import shutil
 from tqdm import tqdm
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._3D, flip_input=False,device="cuda")
+import ssl
+ 
+ssl._create_default_https_context = ssl._create_unverified_context
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._3D, flip_input=False,device="cuda")
 
 def is_iou(x1,x2,y1,y2,x1_pre,x2_pre,y1_pre,y2_pre):
     area1=(x2-x1)*(y2-y1)
@@ -70,7 +74,7 @@ def face_points_detect(img,x1_pre,x2_pre,y1_pre,y2_pre):
 def mp42img(paths):
     for path in paths:
         dir_path=os.path.join(path,'video')
-        save_path=os.path.join(path,'face')
+        save_path=os.path.join('\hdd\sdd\lzq\DLMM_new\dataset\dataset','face')
         bar = tqdm(total=len(os.listdir(dir_path)), desc=f"face path: {dir_path}")
         if not os.path.exists(save_path):
             os.mkdir(save_path)
@@ -88,6 +92,8 @@ def mp42img(paths):
                 save_path_2=os.path.join(save_path_2,j)
                 if not os.path.exists(save_path_2):
                     os.mkdir(save_path_2)
+                else:
+                    continue
                 cnt=-1
                 actcnt=-1
                 while cap.isOpened():
@@ -95,7 +101,7 @@ def mp42img(paths):
                     ret, frame = cap.read()
                     if not ret:
                         break
-                    if actcnt%round(fps)!=0:
+                    if actcnt%round(fps//5)!=0:
                         continue
                     cnt+=1
                     img,pos,x1,x2,y1,y2=face_points_detect(frame,x1,x2,y1,y2)
@@ -109,65 +115,18 @@ def mp42img(paths):
             bar.update(1)
         bar.close()
 
-def mp42img_v2(paths):
-    for path in paths:
-        dir_path=os.path.join(path,'video')
-        save_path=os.path.join(path,'face')
-        bar = tqdm(total=len(os.listdir(dir_path)), desc=f"face path: {dir_path}")
-        if not os.path.exists(save_path):
-            os.mkdir(save_path)
-        for i in sorted(os.listdir(dir_path),key=lambda x:int(x.split('.')[0])):
-            dir_path_2=os.path.join(dir_path,i)
-            for j in sorted(os.listdir(dir_path_2)):
-                dir_path_3=os.path.join(dir_path_2,j)
-                cap = cv2.VideoCapture(dir_path_3)
-                fps = cap.get(cv2.CAP_PROP_FPS)
-
-                x1,x2,y1,y2=0,0,0,0
-                save_path_2=os.path.join(save_path,i)
-                if not os.path.exists(save_path_2):
-                    os.mkdir(save_path_2)
-                save_path_2=os.path.join(save_path_2,j)
-                if not os.path.exists(save_path_2):
-                    os.mkdir(save_path_2)
-                cnt=-1
-                actcnt=-1
-                while cap.isOpened():
-                    actcnt+=1
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
-                    if actcnt%round(fps)!=0:
-                        continue
-                    cnt+=1
-                    img,pos,x1,x2,y1,y2=face_points_detect(frame,x1,x2,y1,y2)
-                    if img is None or img.shape[0]*img.shape[1]*img.shape[2]==0:
-                        continue
-                    img=cv2.cvtColor(img,cv2.COLOR_RGB2BGR)
-                    cv2.imwrite(os.path.join(save_path_2,str(cnt))+".jpg",img)
-                    np.save(os.path.join(save_path_2,str(cnt)+".npy"),pos)
-                cap.release() 
-            bar.set_postfix(**{'person': i})
-            bar.update(1)
-        bar.close()
      
-# mp42img([
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.1.29/pain2",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain1",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain2",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain3",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.2.25/pain4",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4",
-#     #"/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain5",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain7",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain8",
-#   ])
+mp42img([
+    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain1",
+    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain2",
+    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.5\pain3",
+    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.5\pain4",
+    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain3",
+    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain4",
+    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain7",
+    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain8",
+    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain5",
+  ])
 
 import csv
 def get_video_name(paths):
