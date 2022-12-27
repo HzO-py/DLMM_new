@@ -86,7 +86,7 @@ def extractor_train(modal):
     extractor=Resnet_regressor(modal)
     model=SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
     model.train_init(dataset,LR,WEIGHT_DELAY,[model.extractor],nn.MSELoss(),nn.L1Loss())
-    model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
+    #model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
     model.extractor_train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
 
 def classifier_train(modal):
@@ -97,13 +97,13 @@ def classifier_train(modal):
     model.classifier_train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME))
 
 def time_extractor_train(modal,is_selfatt):
-    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=None,pic_size=PIC_SIZE)
+    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
     extractor=NoChange() if modal=='bio' else Resnet_regressor(modal)
     model=SingleModel(extractor,Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
-    # if modal!='bio':
-    #     model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
+    if modal!='bio':
+        model.load_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
     model.train_init(dataset,LR,WEIGHT_DELAY,[model.time_extractor,model.regressor],nn.MSELoss(),nn.L1Loss())
-    model.load_time_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
+    #model.load_time_checkpoint(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))
     model.time_extractor_train(EPOCH,os.path.join(LOGS_ROOT,MODEL_NAME),is_selfatt=is_selfatt)
 
 def extractor_test(modal):
@@ -243,10 +243,11 @@ def Mul_MultiExperts_test(modelNum):
         modelList.append(SingleModel(Resnet_regressor("face"),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"face"))
     for _ in range(modelNum):
         modelList.append(SingleModel(Resnet_regressor("voice"),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"voice"))
-    # for _ in range(modelNum):
-    #     modelList.append(SingleModel(NoChange(),Time_SelfAttention(3,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"bio"))
+    for _ in range(modelNum):
+        modelList.append(SingleModel(NoChange(),Time_SelfAttention(3,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"bio"))
     experts=MultiExperts(modelList)
-    checkpointList=[torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2))]
+    #checkpointList=[torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2))]
+    checkpointList=[torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3))]
     experts.mul_test_init(checkpointList,dataset)
     experts.test()
 
@@ -257,11 +258,12 @@ def Mul_MultiExperts_test(modelNum):
 #extractor_test(MODAL)
 #extractor_train(MODAL)
 
-#print(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["acc"],torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["test_hunxiao"])
+#print(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME))["acc"])
+
 #cluster_train(MODAL,is_selfatt=True)
 MultiExperts_train(MODAL)
 #MultiExperts_checkpoint_train(MODAL)
 #MultiExperts_test(MODAL,3)
-#Mul_MultiExperts_test(3)
+# Mul_MultiExperts_test(3)
 #MultiExperts_checkpoint_train(MODAL)
 #train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,MODAL,is_time=False,pic_size=PIC_SIZE)

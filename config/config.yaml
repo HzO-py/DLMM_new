@@ -3,16 +3,16 @@ MODEL_ROOT: \hdd\sdd\lzq\DLMM_new\model
 LOGS_ROOT: \hdd\sdd\lzq\DLMM_new\model\logs
 CLUSTER_ROOT: \hdd\sdd\lzq\DLMM_new\model\cluster
 
-MODEL_NAME: experts_zd_bio_3f2_
+MODEL_NAME: experts_zd_face_3f2
 MODEL_NAME2: voice_bio_v11.t7
 
-CHECKPOINT_NAME: experts_zd_face_3f2_0G.t7
+CHECKPOINT_NAME: face_time_epoch10_v11.t7
 CHECKPOINT_NAME2: experts_zd_voice_3f_0G.t7
 CHECKPOINT_NAME3: experts_zd_bio_3f_0G.t7
-CHECKPOINT_NAME4: experts_zd_face_v11.t7
+CHECKPOINT_NAME4: experts_zd_bio_3f_0G.t7
 
 GPUID: "0"
-SEED: 89
+SEED: 85
 
 EPOCH: 50
 SUB_EPOCH: 10
@@ -59,7 +59,7 @@ DATA_PATHS: [
 IS_POINT: True
 
 LR: 0.001
-WEIGHT_DELAY: 0.00001
+WEIGHT_DELAY: 0.0001
 
 SAMPLE_THRESHOLD: 16
 SCORE_THRESHOLD: 0.2

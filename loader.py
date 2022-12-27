@@ -448,7 +448,7 @@ def setMean(face_points,label):
     mouth_mean[int(label//0.1)][2].append(float(mouth.max()))
 
 class AllDataset(Dataset):
-    def __init__(self,is_train,train_rio,paths,modal,is_time,pic_size):
+    def __init__(self,is_train,train_rio,paths,modal,is_time,pic_size,is_test):
         self.is_time=is_time
         self.modal=0 if modal=='face' else 1 if modal=='voice' else 0.5 if modal=='face_point' else 2
         self.all_items=[]
@@ -467,14 +467,17 @@ class AllDataset(Dataset):
         self.all_items=self.items
         self.items=[]
         self.train_rio=int(len(self.all_items)*train_rio)
-        self.all_items=self.all_items[:self.train_rio] if is_train else self.all_items[self.train_rio:]
+        self.test_rio=(len(self.all_items)-self.train_rio)//2+self.train_rio
+        if is_test:
+            is_train=False
+        self.all_items=self.all_items[:self.train_rio] if is_train else self.all_items[self.train_rio:self.train_rio] if not is_test else self.all_items[self.train_rio:]
         if self.modal<2:
             if is_train:
                 self.all_items+=self.fv_items
             if not is_time:
                 houzhui='jpg' if self.modal==0 else 'npy'
                 for item in self.all_items:
-                    for img in sorted(os.listdir(item[floor(self.modal)]),key=lambda x:int(x.split('.')[0])):
+                    for img in os.listdir(item[floor(self.modal)]):
                         if img.endswith(houzhui):
                             # if self.modal==1 and not self.voice_open_mouth(os.path.join(item[floor(self.modal)],img),0.2):
                             #     continue
@@ -488,6 +491,9 @@ class AllDataset(Dataset):
     def load_img(self,file_path):
         img = Image.open(file_path)
         img = self.pic_transform(img)
+        npypath=file_path[:-3]+'npy'
+        angle=self.face_rotate_angle(npypath)
+        img=ToTensor()(rotate(ToPILImage()(img),angle))
         return img
 
     def load_npy(self,file_path):
@@ -605,14 +611,12 @@ class AllDataset(Dataset):
             if not os.path.exists(os.path.join(item[0],'imgs.pt')):
                 for img in sorted(os.listdir(item[0]),key=lambda x:int(x.split('.')[0])):
                     if img.endswith('jpg'):
-                        img_one=self.load_img(os.path.join(item[0],img))
+                        img=self.load_img(os.path.join(item[0],img))
                         npypath=os.path.join(item[0],img)[:-3]+'npy'
-                        angle=self.face_rotate_angle(npypath)
-                        img_one=ToTensor()(rotate(ToPILImage()(img_one),angle))
 
                         voice_path=os.path.join(item[1],img)[:-3]+'npy'
                         if os.path.exists(voice_path):
-                            imgs.append(img_one)
+                            imgs.append(img)
                             npys.append(self.load_npy(voice_path))
                             face_points.append(self.load_face_point(npypath))
                 imgs=torch.stack(imgs)
@@ -633,11 +637,7 @@ class AllDataset(Dataset):
         else:
             if self.modal==0:
                 imgs=self.load_img(item[0])
-
-                npypath=item[0][:-3]+'npy'
-                face_points=np.load(npypath)
-                angle=self.face_rotate_angle(npypath)
-                imgs=rotate(imgs,angle)      
+    
             elif self.modal==1:
                 npys=self.load_npy(item[0])
             else:

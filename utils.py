@@ -261,7 +261,6 @@ def getAllSample(root_path,label_path,version):
                             samples.append([root_path_3,voicepath,biopath,label])
                             if ageclass!=-1:
                                 score_distribute_bio[ageclass][int(label//0.1)]+=1
-                            #ages_distribute_bio[ageclass]+=1
                             flg=False
                             break
                     if flg:
