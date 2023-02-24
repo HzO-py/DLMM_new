@@ -111,6 +111,18 @@ class ClusterCenter(nn.Module):
         centers = list(self.fc1.parameters())
         return x,centers
 
+class Cluster(nn.Module):
+    def __init__(self,inputNum,hiddenNum,cluster_num):
+        super(Cluster, self).__init__()
+        self.cluster_num=cluster_num
+        self.fc1 = nn.Linear(inputNum, hiddenNum)
+        self.fc2 = nn.Linear(hiddenNum, cluster_num, bias = False)
+
+    def forward(self, x):
+        x=self.fc1(x)
+        centers = list(self.fc2.parameters())
+        return x,centers
+
 class Prototype(nn.Module):#自定义类 继承nn.Module
 
     def __init__(self,inputNum,hiddenNum,outputNum):#初始化函数

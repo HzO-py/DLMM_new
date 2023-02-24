@@ -101,7 +101,6 @@ class FaceDataset(Dataset):
         for i in range(len(self.y_label)):
             tensor=torch.ones(self.y_label[i],dtype=torch.float16)*self.y_weight[i]
             weights=torch.cat([weights,tensor],dim=0)
-        a=min(self.y_label)*len(self.y_label)
         return WeightedRandomSampler(weights, min(self.y_label)*len(self.y_label),replacement=False)
 
     def __len__(self):
@@ -597,7 +596,19 @@ class AllDataset(Dataset):
         y_label=[0,0,0,0,0,0,0,0,0,0]
         for item in self.all_items:
             y_label[int(item[-1]//0.1)]+=1
+        self.y_label=y_label
         print(y_label)
+
+    def get_sampler(self):
+        self.all_items.sort(key=lambda x:float(x[-1]))
+        self.y_weight=[]
+        for i in range(len(self.y_label)):
+            self.y_weight.append(1.0/self.y_label[i])
+        weights=torch.Tensor([])
+        for i in range(len(self.y_label)):
+            tensor=torch.ones(self.y_label[i],dtype=torch.float16)*self.y_weight[i]
+            weights=torch.cat([weights,tensor],dim=0)
+        return WeightedRandomSampler(weights, min(self.y_label)*len(self.y_label),replacement=False)
 
     def __getitem__(self,idr):
         item=self.all_items[idr]
@@ -609,16 +620,15 @@ class AllDataset(Dataset):
         angle=0
         if self.is_time:
             if not os.path.exists(os.path.join(item[0],'imgs.pt')):
-                for img in sorted(os.listdir(item[0]),key=lambda x:int(x.split('.')[0])):
+                item_list=os.listdir(item[0])
+                # item_list.remove('imgs.pt')
+                for img in sorted(item_list,key=lambda x:int(x.split('.')[0])):
                     if img.endswith('jpg'):
-                        img=self.load_img(os.path.join(item[0],img))
-                        npypath=os.path.join(item[0],img)[:-3]+'npy'
-
                         voice_path=os.path.join(item[1],img)[:-3]+'npy'
+                        img=self.load_img(os.path.join(item[0],img))
                         if os.path.exists(voice_path):
                             imgs.append(img)
                             npys.append(self.load_npy(voice_path))
-                            face_points.append(self.load_face_point(npypath))
                 imgs=torch.stack(imgs)
                 npys=torch.stack(npys)
                 torch.save(imgs, os.path.join(item[0],'imgs.pt'))
@@ -661,23 +671,23 @@ def collate_fn(batch_datas):
 def main():
     DATA_PATHS=[
   #2-138
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain1","/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   #139-244
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain2","/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   #255-312
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sda/lzq/DLMM_new/dataset/2022.3.5/pain3","/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   #313-352
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sda/lzq/DLMM_new/dataset/2022.3.5/pain4","/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   #353-509
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain3","/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   #510-582
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain4","/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   #583-720
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain7","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain7","/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   #721-843
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain8","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain8","/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   #844-1049
-  ["/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5","/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
+  ["/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain5","/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv",2],
   ]
     train_dataset=AllDataset(0,0.0,DATA_PATHS,'face',1)
     train_dataloader = DataLoader(train_dataset, batch_size=1,shuffle=True)

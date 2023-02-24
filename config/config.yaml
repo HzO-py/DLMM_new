@@ -1,23 +1,25 @@
-DATA_ROOT: \hdd\lzq\PartA\biosignals_raw
-MODEL_ROOT: \hdd\sdd\lzq\DLMM_new\model
-LOGS_ROOT: \hdd\sdd\lzq\DLMM_new\model\logs
-CLUSTER_ROOT: \hdd\sdd\lzq\DLMM_new\model\cluster
+DATA_ROOT: /hdd/lzq/PartA/biosignals_raw
+MODEL_ROOT: /hdd/sda/lzq/DLMM_new/model
+LOGS_ROOT: /hdd/sda/lzq/DLMM_new/model/logs
+CLUSTER_ROOT: /hdd/sda/lzq/DLMM_new/model/cluster
 
-MODEL_NAME: experts_zd_face_3f2
-MODEL_NAME2: voice_bio_v11.t7
+MODEL_NAME: experts_face_voice_v11.t7
+MODEL_NAME2: experts_face_voice_v11
 
-CHECKPOINT_NAME: face_time_epoch10_v11.t7
-CHECKPOINT_NAME2: experts_zd_voice_3f_0G.t7
-CHECKPOINT_NAME3: experts_zd_bio_3f_0G.t7
-CHECKPOINT_NAME4: experts_zd_bio_3f_0G.t7
+CHECKPOINT_NAME: experts_face_v11_3f0G.t7
+CHECKPOINT_NAME2: experts_voice_v11_3f_0G.t7
+CHECKPOINT_NAME3: face_voice_v11.t7
+CHECKPOINT_NAME4: experts_face_voice_v11.t7
 
-GPUID: "0"
-SEED: 85
+GPUID: "7"
+SEED: 86
 
-EPOCH: 50
+EPOCH: 100
 SUB_EPOCH: 10
 BATCH_SIZE: 64
 TCN_BATCH_SIZE: 1
+CLUSTER_EPOCH_SIZE_1: 1000
+CLUSTER_EPOCH_SIZE_2: 20
 
 MODAL: face
 
@@ -37,24 +39,26 @@ PIC_SIZE: 224
 
 TRAIN_RIO: 0.8
 DATA_PATHS: [
-  #2-138
-  [\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\pain1,\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\label.csv,2],
-  #139-244
-  [\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\pain2,\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\label.csv,2],
-  #255-312
-  [\hdd\sdd\lzq\DLMM_new\dataset\2022.3.5\pain3,\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\label.csv,2],
-  #313-352
-  [\hdd\sdd\lzq\DLMM_new\dataset\2022.3.5\pain4,\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\label.csv,2],
-  #353-509
-  [\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\pain3,\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\label.csv,2],
-  #510-582
-  [\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\pain4,\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\label.csv,2],
-  #583-720
-  [\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\pain7,\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\label.csv,2],
-  #721-843
-  [\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\pain8,\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\label.csv,2],
-  #844-1049
-  [\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\pain5,\hdd\sdd\lzq\DLMM_new\dataset\2022.3.23\label.csv,2],
+  [/hdd/sda/lzq/DLMM_new/dataset/dataset,/hdd/sda/lzq/DLMM_new/dataset/dataset/label2.csv,13]
+  #4 or 13
+  # #2-138
+  # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain1,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
+  # #139-244
+  # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain2,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
+  # #255-312
+  # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.5/pain3,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
+  # #313-352
+  # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.5/pain4,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
+  # #353-509
+  # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain3,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
+  # #510-582
+  # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain4,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
+  # #583-720
+  # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain7,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
+  # #721-843
+  # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain8,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
+  # #844-1049
+  # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain5,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
   ]
 IS_POINT: True
 

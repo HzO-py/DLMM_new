@@ -74,7 +74,7 @@ def face_points_detect(img,x1_pre,x2_pre,y1_pre,y2_pre):
 def mp42img(paths):
     for path in paths:
         dir_path=os.path.join(path,'video')
-        save_path=os.path.join('\hdd\sdd\lzq\DLMM_new\dataset\dataset','face')
+        save_path=os.path.join('/hdd/sda/lzq/DLMM_new/dataset/dataset','face')
         bar = tqdm(total=len(os.listdir(dir_path)), desc=f"face path: {dir_path}")
         if not os.path.exists(save_path):
             os.mkdir(save_path)
@@ -117,20 +117,20 @@ def mp42img(paths):
 
      
 mp42img([
-    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain1",
-    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain2",
-    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.5\pain3",
-    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.5\pain4",
-    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain3",
-    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain4",
-    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain7",
-    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain8",
-    "\hdd\sdd\lzq\DLMM_new\dataset\\2022.3.23\pain5",
+    "/hdd/sda/lzq/DLMM_new/dataset//2022.3.23/pain1",
+    "/hdd/sda/lzq/DLMM_new/dataset//2022.3.23/pain2",
+    "/hdd/sda/lzq/DLMM_new/dataset//2022.3.5/pain3",
+    "/hdd/sda/lzq/DLMM_new/dataset//2022.3.5/pain4",
+    "/hdd/sda/lzq/DLMM_new/dataset//2022.3.23/pain3",
+    "/hdd/sda/lzq/DLMM_new/dataset//2022.3.23/pain4",
+    "/hdd/sda/lzq/DLMM_new/dataset//2022.3.23/pain7",
+    "/hdd/sda/lzq/DLMM_new/dataset//2022.3.23/pain8",
+    "/hdd/sda/lzq/DLMM_new/dataset//2022.3.23/pain5",
   ])
 
 import csv
 def get_video_name(paths):
-    #f = open('/hdd/sdd/lzq/DLMM_new/dataset/video_name.csv', 'w')
+    #f = open('/hdd/sda/lzq/DLMM_new/dataset/video_name.csv', 'w')
     #writer = csv.writer(f)
     for path in paths:
         dir_path=os.path.join(path,'video')
@@ -153,7 +153,7 @@ def get_bio_name(paths):
     # bio_list=[]
     # for i in range(1050):
     #     bio_list.append(["","","",""])
-    # f = open('/hdd/sdd/lzq/DLMM_new/dataset/bio_name.csv', 'w')
+    # f = open('/hdd/sda/lzq/DLMM_new/dataset/bio_name.csv', 'w')
     # writer = csv.writer(f)
     for path in paths:
         dir_path=os.path.join(path,'bio')
@@ -170,13 +170,13 @@ def get_bio_name(paths):
     # f.close()
 
 #get_bio_name([
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain1",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain2",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain3",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.5/pain4",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain3",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain4",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain7",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain8",
-#     "/hdd/sdd/lzq/DLMM_new/dataset/2022.3.23/pain5",
+#     "/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain1",
+#     "/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain2",
+#     "/hdd/sda/lzq/DLMM_new/dataset/2022.3.5/pain3",
+#     "/hdd/sda/lzq/DLMM_new/dataset/2022.3.5/pain4",
+#     "/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain3",
+#     "/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain4",
+#     "/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain7",
+#     "/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain8",
+#     "/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain5",
 #   ])
