@@ -1030,7 +1030,7 @@ class MultiExperts():
         dis_list=[]
         #x_fea=self.backbone_forward(x)
         for i in range(len(self.modelList)):
-            dis=self.GuassianDist(x,self.centerList[i],self.stdList[i])
+            dis=self.GuassianDist(x[i],self.centerList[i],self.stdList[i])
             dis_list.append(dis)
         weights=[]
         for i in range(len(self.modelList)):
@@ -1169,6 +1169,8 @@ class MultiExperts():
         self.dataset=dataset
         self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
         
+        self.train_criterion=nn.MSELoss()
+        self.train_criterion.requires_grad_ = False
         self.test_criterion=nn.L1Loss()
         self.test_criterion.requires_grad_ = False
 
@@ -1178,7 +1180,7 @@ class MultiExperts():
             w.append(w1[i]*w2[i])
         return [x/sum(w) for x in w]    
 
-    def test(self):        
+    def mul_test(self):        
         cnt=0
         l1_loss = 0.0
         l2_loss = 0.0
@@ -1187,28 +1189,18 @@ class MultiExperts():
         with torch.no_grad():
             bar = tqdm(total=len(self.dataset.test_dataloader), desc=f"test")
             for data in self.dataset.test_dataloader:
-                if (data['xs'][0][0]).size()[0]<10:
-                    continue
+                # if (data['xs'][0][0]).size()[0]<10:
+                #     continue
                 outputs_list=[]
                 fea_list=[]
                 for i in range(len(self.modelList)):
                     sub_outputs,y,fea=self.train_forward(data,is_train=False,model=self.modelList[i])
                     outputs_list.append(sub_outputs)
-                    # loss_weights.append(1.0/self.train_loss[i][int(float(sub_outputs.cpu())/0.1)])
-                for i in range(len(self.modelList)//3):
-                    _,_,fea=self.train_forward(data,is_train=False,model=self.backbone_list[i])
-                    fea,_=self.cluster_list[i](fea)
                     fea_list.append(fea.squeeze(0))
                 weights=self.whichCluster(fea_list)
-                # loss_weights=[x/sum(loss_weights) for x in loss_weights]
-                # weights=self.weights_fusion(weights,loss_weights)
-                #weights=self.whichCluster(data['xs'][self.modal])
                 outputs=0
                 for i in range(len(self.modelList)):
                     outputs+=weights[i]*outputs_list[i]
-
-                #print("groundtruth:",float(y),"  predict:",float(outputs),"  experts:",[float(i) for i in outputs_list],"  weights:",[float(i) for i in weights])
-                # writer.writerow([float(y),float(outputs)]+[float(i) for i in outputs_list]+[float(i) for i in weights])
 
                 l1_loss_sub = self.test_criterion(outputs, y).item()
                 l2_loss_sub = self.train_criterion(outputs, y).item()
@@ -1687,47 +1679,47 @@ class MultiExperts():
             self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
             print('  [Test] mae: %.06f  rmse: %.06f [Best] mae: %.06f'% (testloss,testloss2,self.testloss_best))
 
-    def mul_test(self):        
-        cnt=0
-        l1_loss = 0.0
-        outputs_record=[]
-        y_record=[]
-        with torch.no_grad():
-            bar = tqdm(total=len(self.dataset.test_dataloader), desc=f"test")
-            for data in self.dataset.test_dataloader:
-                if (data['xs'][0][0]).size()[0]<10:
-                    continue
-                outputs_list=[]
-                fea_list=[]
-                for i in range(len(self.modelList)):
-                    sub_outputs,y,fea=self.train_forward(data,is_train=False,model=self.modelList[i])
-                    outputs_list.append(sub_outputs)
-                for i in range(len(self.modelList)//3):
-                    _,_,fea=self.train_forward(data,is_train=False,model=self.backbone_list[i])
-                    fea,_=self.cluster_list[i](fea)
-                    fea_list.append(fea.squeeze(0))
-                weights=self.whichCluster_mul(fea_list)
-                #weights=self.whichCluster(data['xs'][self.modal])
-                outputs=0
-                for i in range(len(self.modelList)):
-                    outputs+=weights[i]*outputs_list[i]
+    # def mul_test(self):        
+    #     cnt=0
+    #     l1_loss = 0.0
+    #     outputs_record=[]
+    #     y_record=[]
+    #     with torch.no_grad():
+    #         bar = tqdm(total=len(self.dataset.test_dataloader), desc=f"test")
+    #         for data in self.dataset.test_dataloader:
+    #             if (data['xs'][0][0]).size()[0]<10:
+    #                 continue
+    #             outputs_list=[]
+    #             fea_list=[]
+    #             for i in range(len(self.modelList)):
+    #                 sub_outputs,y,fea=self.train_forward(data,is_train=False,model=self.modelList[i])
+    #                 outputs_list.append(sub_outputs)
+    #             for i in range(len(self.modelList)//3):
+    #                 _,_,fea=self.train_forward(data,is_train=False,model=self.backbone_list[i])
+    #                 fea,_=self.cluster_list[i](fea)
+    #                 fea_list.append(fea.squeeze(0))
+    #             weights=self.whichCluster_mul(fea_list)
+    #             #weights=self.whichCluster(data['xs'][self.modal])
+    #             outputs=0
+    #             for i in range(len(self.modelList)):
+    #                 outputs+=weights[i]*outputs_list[i]
 
-                l1_loss_sub = self.test_criterion(outputs, y).item()
-                outputs_record.append(float(outputs))
-                y_record.append(float(y))
-                l1_loss +=l1_loss_sub
-                self.test_hunxiao[int(min(y,1.0-1e-5)//0.1)].append(l1_loss_sub)
-                outputs_record.append(float(outputs))
-                y_record.append(float(y))
-                cnt+=1
-                bar.set_postfix(**{'mae': l1_loss / cnt})
-                bar.update(1)
-            bar.close()
-        pcc,ccc=cal_pcc_ccc(outputs_record,y_record)
-        tmp=[]
-        for hunxiao in self.test_hunxiao:
-            if len(hunxiao):
-                tmp.append(sum(hunxiao)/len(hunxiao))
-        self.test_hunxiao=tmp
+    #             l1_loss_sub = self.test_criterion(outputs, y).item()
+    #             outputs_record.append(float(outputs))
+    #             y_record.append(float(y))
+    #             l1_loss +=l1_loss_sub
+    #             self.test_hunxiao[int(min(y,1.0-1e-5)//0.1)].append(l1_loss_sub)
+    #             outputs_record.append(float(outputs))
+    #             y_record.append(float(y))
+    #             cnt+=1
+    #             bar.set_postfix(**{'mae': l1_loss / cnt})
+    #             bar.update(1)
+    #         bar.close()
+    #     pcc,ccc=cal_pcc_ccc(outputs_record,y_record)
+    #     tmp=[]
+    #     for hunxiao in self.test_hunxiao:
+    #         if len(hunxiao):
+    #             tmp.append(sum(hunxiao)/len(hunxiao))
+    #     self.test_hunxiao=tmp
 
-        print(l1_loss / cnt,self.test_hunxiao)
+    #     print(l1_loss / cnt,self.test_hunxiao)

@@ -267,30 +267,30 @@ def Mul_MultiExperts_train(modelNum):
     # experts.mul_test()
 
 def Mul_MultiExperts_test(modelNum):
-    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,"face",is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
+    dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,"voice",is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
     modelList=[]
 
-    for _ in range(modelNum):
-        modelList.append(SingleModel(Resnet_regressor("face"),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"face"))
+    # for _ in range(modelNum):
+    #     modelList.append(SingleModel(Resnet_regressor("face"),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"face"))
     for _ in range(modelNum):
         modelList.append(SingleModel(Resnet_regressor("voice"),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"voice"))
     # for _ in range(modelNum):
     #     modelList.append(SingleModel(NoChange(),Time_SelfAttention(3,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),"bio"))
     experts=MultiExperts(modelList)
-    # checkpointList=[torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3))]
-    checkpointList=[torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2))]
+    checkpointList=[torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2))]
+    # checkpointList=[torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2))]
     #checkpointList=[torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)),torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3))]
-    for checkpoint in checkpointList:
-        show(checkpoint)
+
     experts.mul_test_init(checkpointList,dataset)
     experts.mul_test()
 
 def show(checkpoint):
     keys=['acc','rmse','pcc','ccc','test_hunxiao']
+    # for i in range(len(checkpoint['test_hunxiao'])):
+    #     checkpoint['test_hunxiao'][i]=float(checkpoint['test_hunxiao'][i])
     for key in keys:
         print(key,checkpoint[key])
-
-
+    
 # show(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3)))
 #voice_train()
 #three_train()
@@ -303,7 +303,7 @@ def show(checkpoint):
 # MultiExperts_train(MODAL)#5800
 #MultiExperts_checkpoint_train(MODAL)1  
 #MultiExperts_test(MODAL,3)
-Mul_MultiExperts_train(3)#35329
+# Mul_MultiExperts_train(3)
 # Mul_MultiExperts_test(3)
 #MultiExperts_checkpoint_train(MODAL)
-#train_dataset=FaceDataset(1,TRAIN_RIO,DATA_PATHS,MODAL,is_time=False,pic_size=PIC_SIZE)
+# dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,"face",is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)

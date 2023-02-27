@@ -6,9 +6,9 @@ CLUSTER_ROOT: /hdd/sda/lzq/DLMM_new/model/cluster
 MODEL_NAME: experts_face_voice_v11.t7
 MODEL_NAME2: experts_face_voice_v11
 
-CHECKPOINT_NAME: experts_face_v11_3f0G.t7
-CHECKPOINT_NAME2: experts_voice_v11_3f_0G.t7
-CHECKPOINT_NAME3: face_voice_v11.t7
+CHECKPOINT_NAME: experts_face_v100_3f0G.t7
+CHECKPOINT_NAME2: experts_voice_v100_3f0G.t7
+CHECKPOINT_NAME3: experts_face_voice_v100.t7
 CHECKPOINT_NAME4: experts_face_voice_v11.t7
 
 GPUID: "7"
@@ -37,7 +37,7 @@ AU_HIDDEN_SIZE: 32
 AU_OUTPUT_SIZE: 32
 PIC_SIZE: 224
 
-TRAIN_RIO: 0.8
+TRAIN_RIO: 1.0
 DATA_PATHS: [
   [/hdd/sda/lzq/DLMM_new/dataset/dataset,/hdd/sda/lzq/DLMM_new/dataset/dataset/label2.csv,13]
   #4 or 13
