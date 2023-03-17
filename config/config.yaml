@@ -3,12 +3,12 @@ MODEL_ROOT: /hdd/sda/lzq/DLMM_new/model
 LOGS_ROOT: /hdd/sda/lzq/DLMM_new/model/logs
 CLUSTER_ROOT: /hdd/sda/lzq/DLMM_new/model/cluster
 
-MODEL_NAME: experts_face_voice_v11.t7
+MODEL_NAME: experts_face_v100_3f_new_
 MODEL_NAME2: experts_face_voice_v11
 
-CHECKPOINT_NAME: experts_face_v100_3f0G.t7
-CHECKPOINT_NAME2: experts_voice_v100_3f0G.t7
-CHECKPOINT_NAME3: experts_face_voice_v100.t7
+CHECKPOINT_NAME: face_time_v100.t7
+CHECKPOINT_NAME2: experts_face_v100_3f_kmeans0G.t7
+CHECKPOINT_NAME3: experts_face_v100_5f_0G.t7
 CHECKPOINT_NAME4: experts_face_voice_v11.t7
 
 GPUID: "7"
@@ -20,6 +20,7 @@ BATCH_SIZE: 64
 TCN_BATCH_SIZE: 1
 CLUSTER_EPOCH_SIZE_1: 1000
 CLUSTER_EPOCH_SIZE_2: 20
+CLUSTER_NUM: 3
 
 MODAL: face
 
@@ -37,9 +38,9 @@ AU_HIDDEN_SIZE: 32
 AU_OUTPUT_SIZE: 32
 PIC_SIZE: 224
 
-TRAIN_RIO: 1.0
+TRAIN_RIO: 0.8
 DATA_PATHS: [
-  [/hdd/sda/lzq/DLMM_new/dataset/dataset,/hdd/sda/lzq/DLMM_new/dataset/dataset/label2.csv,13]
+  [/hdd/sda/lzq/DLMM_new/dataset/dataset,/hdd/sda/lzq/DLMM_new/dataset/dataset/label2.csv,4]
   #4 or 13
   # #2-138
   # [/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/pain1,/hdd/sda/lzq/DLMM_new/dataset/2022.3.23/label.csv,2],
@@ -67,4 +68,3 @@ WEIGHT_DELAY: 0.0001
 
 SAMPLE_THRESHOLD: 16
 SCORE_THRESHOLD: 0.2
-CLUSTER_NUM: 3

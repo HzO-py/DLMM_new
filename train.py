@@ -204,10 +204,11 @@ def MultiExperts_train(modal):
         experts.load_checkpoint(checkList,space_path=space_path,centerList=centerList,stdList=stdList)
         experts.train_init(dataset,LR,WEIGHT_DELAY)
         experts.protype_train(backbone=SingleModel(Resnet_regressor(modal),Time_SelfAttention(EXTRACT_NUM,HIDDEN_NUM),Regressor(HIDDEN_NUM*2,HIDDEN_NUM),modal)
-,checkpoint=torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),protype=Cluster(HIDDEN_NUM*2,HIDDEN_NUM,CLUSTER_NUM),CLUSTER_EPOCH_SIZE_2=CLUSTER_EPOCH_SIZE_2)
-        experts.train(EPOCH,save_model)
+,checkpoint=torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)),protype=Cluster(HIDDEN_NUM*2,HIDDEN_NUM,CLUSTER_NUM),CLUSTER_EPOCH_SIZE_2=CLUSTER_EPOCH_SIZE_2,num=CLUSTER_NUM,savepath=os.path.join(save_cluster,str(0)))
+        experts.train(EPOCH,save_model,num)
         checkpoint=torch.load(save_model)
         cnt+=1
+#Cluster(HIDDEN_NUM*2,HIDDEN_NUM,CLUSTER_NUM)
 
 def MultiExperts_checkpoint_train(modal):
     dataset=DataSet(TCN_BATCH_SIZE,TRAIN_RIO,DATA_PATHS,modal,is_time=True,collate_fn=collate_fn,pic_size=PIC_SIZE)
@@ -286,11 +287,17 @@ def Mul_MultiExperts_test(modelNum):
 
 def show(checkpoint):
     keys=['acc','rmse','pcc','ccc','test_hunxiao']
+    # keys=['centerList','stdList']
     # for i in range(len(checkpoint['test_hunxiao'])):
     #     checkpoint['test_hunxiao'][i]=float(checkpoint['test_hunxiao'][i])
     for key in keys:
         print(key,checkpoint[key])
     
+
+
+
+# show(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME)))    
+# show(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME2)))
 # show(torch.load(os.path.join(LOGS_ROOT,CHECKPOINT_NAME3)))
 #voice_train()
 #three_train()
@@ -300,7 +307,7 @@ def show(checkpoint):
 #extractor_test(MODAL)
 # extractor_train(MODAL)
 #cluster_train(MODAL,is_selfatt=True)
-# MultiExperts_train(MODAL)#5800
+MultiExperts_train(MODAL)
 #MultiExperts_checkpoint_train(MODAL)1  
 #MultiExperts_test(MODAL,3)
 # Mul_MultiExperts_train(3)

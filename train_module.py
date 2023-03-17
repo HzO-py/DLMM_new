@@ -404,16 +404,53 @@ class SingleModel():
             torch.save(space_fea,os.path.join(savepath,'space_fea.pt'))
             torch.save(space_y,os.path.join(savepath,'space_y.pt'))
             np.save(os.path.join(savepath,'space_path.npy'),np.array(space_path))
-        return self.cluster_space(space_fea.cuda(),space_y.cuda(),space_path,savepath,model_id=model_id,sample_threshold=sample_threshold,score_threshold=score_threshold,pre_score=pre_score,cluster_num=cluster_num,EPOCH_SIZE=CLUSTER_EPOCH_SIZE_1)
+        return self.cluster_space(space_fea.cuda(),space_y.cuda(),space_path,savepath,model_id=model_id,sample_threshold=sample_threshold,score_threshold=score_threshold,pre_score=pre_score,cluster_num=cluster_num,EPOCH_SIZE=CLUSTER_EPOCH_SIZE_1,strategy='')
         
 
-    def cluster_space(self,space_fea,space_y,space_path,savepath,model_id,sample_threshold,score_threshold,pre_score,cluster_num,EPOCH_SIZE):
+    def cluster_space(self,space_fea,space_y,space_path,savepath,model_id,sample_threshold,score_threshold,pre_score,cluster_num,EPOCH_SIZE,strategy):
+        inf=1e-9
+        num=cluster_num
         if os.path.exists(os.path.join(savepath,'cluster_centerList.npy')):
             space_path=np.load(os.path.join(savepath,'cluster_space_path.npy'), allow_pickle='TRUE')
             space_path=space_path.item()
             centerList=np.load(os.path.join(savepath,'cluster_centerList.npy'))
             stdList=np.load(os.path.join(savepath,'cluster_stdList.npy'))
-            num=1 if centerList.shape[0]<2 else cluster_num
+            num=centerList.shape[0]
+
+        elif strategy in ['kmeans','dbscan']:
+            cluster_ml=KMeans(n_clusters=num) if strategy=='kmeans' else DBSCAN(eps=0.15, min_samples=2)
+            cluster_labels=cluster_ml.fit(space_fea.cpu()).labels_
+            if strategy=='dbscan':
+                from scipy.spatial.distance import cdist
+                dis=cdist(space_fea.cpu(),space_fea.cpu(),metric='euclidean')
+                num=len(np.unique(cluster_labels))
+            group={}
+            fea_list=[[] for _ in range(num)]
+            center_total=[0]*num
+            std_total=[inf]*num
+
+            for i in range(space_fea.shape[0]):
+                k=cluster_labels[i]
+                group[space_path[i][0]]=k
+                fea_list[k].append(space_fea[i])
+                
+            for k in range(num):
+                center_total[k]=torch.stack(fea_list[k]).mean(axis=0,keepdim=False)
+                std_total[k]=torch.std(torch.stack(fea_list[k]),axis=0)+inf
+
+            space_path=group
+            space_fea=space_fea.cpu().detach().numpy()
+            space_y=space_y.cpu().detach().numpy()
+            centerList=torch.stack(center_total).cpu().detach().numpy()
+            stdList=torch.stack(std_total).cpu().detach().numpy()
+
+            self.tsne_space(space_fea,space_y,cluster_labels,num,savepath)
+                            
+                
+            np.save(os.path.join(savepath,'cluster_space_path.npy'),space_path)
+            np.save(os.path.join(savepath,'cluster_centerList.npy'),centerList)
+            np.save(os.path.join(savepath,'cluster_stdList.npy'),stdList)
+
 
         else:
             for net in self.train_nets:
@@ -430,10 +467,8 @@ class SingleModel():
                 self.cluster.load_state_dict(new_para)
 
             num=cluster_num
-            inf=1e-9
-            plt_loss_list=[[],[]]
-            center_total=[0,0,0]
-            std_total=[inf,inf,inf]
+            center_total=[0]*num
+            std_total=[inf]*num
             loss_best=1e5
             group_best={}
             cluster_labels_best=[0]*space_fea.shape[0]
@@ -442,8 +477,8 @@ class SingleModel():
                 self.optimizer.zero_grad()
                 loss_fea=[]
                 loss_y=[]
-                y_list=[[],[],[]]
-                fea_list=[[],[],[]]
+                y_list=[[] for _ in range(num)]
+                fea_list=[[] for _ in range(num)]
                 cluster_labels=[0]*space_fea.shape[0]
                 group={}
 
@@ -549,8 +584,8 @@ class SingleModel():
         else:
             tsne_fea=TSNE().fit_transform(space_fea)
             np.save(os.path.join(savepath,'tsne_fea.npy'),tsne_fea)
-        tsne_fea_list=[[],[],[]]
-        color=['red','green','blue']
+        tsne_fea_list=[[] for _ in range(num)]
+        color=['red','green','blue','yellow','purple','pink']
         for i in range(len(labels)):
             tsne_fea_list[labels[i]].append(tsne_fea[i])
         for i in range(num):
@@ -976,11 +1011,12 @@ class MultiExperts():
         
     def train_init(self,dataset,LR,WEIGHT_DELAY):
         self.dataset=dataset
-        nets=[]
+        
+        self.optimizer_list=[]
         for i in range(len(self.modelList)):
-            nets+=[self.modelList[i].time_extractor,self.modelList[i].regressor]
-        opt=optim.Adam(chain(*[net.parameters() for net in nets]), lr=LR,weight_decay=WEIGHT_DELAY)
-        self.optimizer=opt
+            nets=[self.modelList[i].time_extractor,self.modelList[i].regressor]
+            opt=optim.Adam(chain(*[net.parameters() for net in nets]), lr=LR,weight_decay=WEIGHT_DELAY)
+            self.optimizer_list.append(opt)
         
         self.train_criterion=nn.MSELoss()
         self.test_criterion=nn.L1Loss()
@@ -1030,15 +1066,17 @@ class MultiExperts():
         dis_list=[]
         #x_fea=self.backbone_forward(x)
         for i in range(len(self.modelList)):
-            dis=self.GuassianDist(x[i],self.centerList[i],self.stdList[i])
+            dis=self.GuassianDist(x,self.centerList[i],self.stdList[i])
             dis_list.append(dis)
         weights=[]
-        for i in range(len(self.modelList)):
-            weights.append(dis_list[i]/(sum(dis_list)+inf))
+        if sum(dis_list)==0:
+            dis_list=[inf for _ in range(len(dis_list))]
+        for i in range(len(dis_list)):
+            weights.append(dis_list[i]/(sum(dis_list)))
 
         if top1:
             max_id=weights.index(max(weights))
-            return max_id
+            # return max_id
             for i in range(len(self.modelList)):
                 weights[i]=1 if i==max_id else 0
 
@@ -1086,7 +1124,7 @@ class MultiExperts():
         plt.title("Epoch_Loss")
         plt.plot(epochs, plt_loss_list[0], label='red_loss', color='r', linestyle='-')
         plt.plot(epochs, plt_loss_list[1], label='green_loss', color='g', linestyle='-')
-        plt.plot(epochs, plt_loss_list[2], label='blue_loss', color='b', linestyle='-')
+        # plt.plot(epochs, plt_loss_list[2], label='blue_loss', color='b', linestyle='-')
         #plt.plot(epochs, plt_loss_list[3], label='total_loss', color='purple', linestyle='-')
         plt.plot(epochs, plt_loss_list[-1], label='val_loss', color='y', linestyle='-')
         plt.legend()
@@ -1223,7 +1261,7 @@ class MultiExperts():
 
         print(l1_loss / cnt,math.sqrt(l2_loss/cnt),self.test_hunxiao)
 
-    def protype_train(self,backbone:SingleModel,checkpoint,protype:Prototype,CLUSTER_EPOCH_SIZE_2):
+    def protype_train(self,backbone:SingleModel,checkpoint,protype:Prototype,CLUSTER_EPOCH_SIZE_2,num,savepath):
         self.backbone=backbone
         self.backbone.load_time_checkpoint(checkpoint)
         self.cluster=protype
@@ -1234,73 +1272,85 @@ class MultiExperts():
         self.backbone.extractor.eval()
         self.backbone.time_extractor.eval()
         self.backbone.regressor.eval()
-        self.cluster.train()
-        nets=[self.cluster]
-        opt=optim.Adam(chain(*[net.parameters() for net in nets]), lr=0.001,weight_decay=0.0001)
-        best_acc=1e5
+
+
+        if not os.path.exists(os.path.join(savepath,'new_cluster.t7')):
+            self.cluster.train()
+            nets=[self.cluster]
+            opt=optim.Adam(chain(*[net.parameters() for net in nets]), lr=0.001,weight_decay=0.0001)
+            best_acc=1e5
+
+            with torch.no_grad():
+                new_para=self.cluster.state_dict()
+                new_para['fc2.weight']=self.cluster(self.centerList.cuda())[0]
+                self.cluster.load_state_dict(new_para)
+
+            
+            centerList=[0]*num
+            stdList=[0]*num
+            for epoch in range(CLUSTER_EPOCH_SIZE_2):
+                bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"exp_cluster epoch {epoch}")
+                space_fea=[]
+                space_y=[]
+                fea_list=[[] for _ in range(num)]
+
+                loss_sum=0
+                cnt=0
+                for data in self.dataset.train_dataloader:
+                    if (data['xs'][0][0]).size()[0]<10:
+                        continue
+                    model_id=self.space_path[data['xs'][-1][0]]
+                    with torch.no_grad():
+                        _,y,time_outputs=self.train_forward(data,False,self.backbone)
+                    fea,center=self.cluster(time_outputs)
+                    space_fea.append(fea.squeeze(0))
+                    fea_list[model_id].append(fea.squeeze(0))
+                    space_y.append(y.squeeze(0))
+                    loss=0
+                    opt.zero_grad()
+                    for k in range(self.cluster.cluster_num):
+                        eu_distance = -1*torch.norm(fea - center[0][k]) #计算第k（k=0或1）个中心center[0][k]和当前第i个特征fea的负的欧式距离
+                        gussian_distance=torch.exp(eu_distance) #gussian_distance越大，距离越小
+                        if k==model_id:
+                            loss+=-torch.log(gussian_distance)
+                        else:
+                            loss+=-torch.log(1-gussian_distance)
+                    loss.backward()
+                    opt.step()
+                    loss_sum+=loss.item()
+                    cnt+=1
+                    bar.set_postfix(**{'loss':loss_sum/cnt})
+                    bar.update(1)
+                bar.close()
+                # space_y=torch.stack(space_y).cpu().detach().numpy()
+                # space_fea=torch.stack(space_fea).cpu().detach().numpy() 
+                # tsne_fea=TSNE().fit_transform(space_fea)
+                # plt.scatter(tsne_fea[:,0],tsne_fea[:,1],c=space_y/0.1*0.1,cmap="coolwarm")
+                # plt.savefig('/hdd/sda/lzq/DLMM_new/test/cluster.jpg')
+                # plt.close()
+                
+
+                
+                acc=loss_sum/cnt
+                if acc<=best_acc:
+                    best_acc=acc
+                    inf=1e-15
+                    for i in range(self.cluster.cluster_num):
+                        centerList[i]=torch.stack(fea_list[i]).mean(axis=0,keepdim=False)
+                        stdList[i]=torch.std(torch.stack(fea_list[i]),axis=0)+inf
+                    state={
+                        'centerList':centerList,
+                        'stdList':stdList,
+                        'cluster':self.cluster.state_dict()
+                    }
+                    torch.save(state,os.path.join(savepath,'new_cluster.t7'))
 
         with torch.no_grad():
-            new_para=self.cluster.state_dict()
-            new_para['fc2.weight']=self.cluster(self.centerList.cuda())[0]
-            self.cluster.load_state_dict(new_para)
-
-        
-        centerList=[0,0,0]
-        stdList=[0,0,0]
-        for epoch in range(CLUSTER_EPOCH_SIZE_2):
-            bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"exp_cluster epoch {epoch}")
-            space_fea=[]
-            space_y=[]
-            fea_list=[[],[],[]]
-
-            loss_sum=0
-            cnt=0
-            for data in self.dataset.train_dataloader:
-                if (data['xs'][0][0]).size()[0]<10:
-                    continue
-                model_id=self.space_path[data['xs'][-1][0]]
-                with torch.no_grad():
-                    _,y,time_outputs=self.train_forward(data,False,self.backbone)
-                fea,center=self.cluster(time_outputs)
-                space_fea.append(fea.squeeze(0))
-                fea_list[model_id].append(fea.squeeze(0))
-                space_y.append(y.squeeze(0))
-                loss=0
-                opt.zero_grad()
-                for k in range(self.cluster.cluster_num):
-                    eu_distance = -1*torch.norm(fea - center[0][k]) #计算第k（k=0或1）个中心center[0][k]和当前第i个特征fea的负的欧式距离
-                    gussian_distance=torch.exp(eu_distance) #gussian_distance越大，距离越小
-                    if k==model_id:
-                        loss+=-torch.log(gussian_distance)
-                    else:
-                        loss+=-torch.log(1-gussian_distance)
-                loss.backward()
-                opt.step()
-                loss_sum+=loss.item()
-                cnt+=1
-                bar.set_postfix(**{'loss':loss_sum/cnt})
-                bar.update(1)
-            bar.close()
-            # space_y=torch.stack(space_y).cpu().detach().numpy()
-            # space_fea=torch.stack(space_fea).cpu().detach().numpy() 
-            # tsne_fea=TSNE().fit_transform(space_fea)
-            # plt.scatter(tsne_fea[:,0],tsne_fea[:,1],c=space_y/0.1*0.1,cmap="coolwarm")
-            # plt.savefig('/hdd/sda/lzq/DLMM_new/test/cluster.jpg')
-            # plt.close()
-            
-
-            
-            acc=loss_sum/cnt
-            if acc<best_acc:
-                best_acc=acc
-                inf=1e-15
-                for i in range(self.cluster.cluster_num):
-                    centerList[i]=torch.stack(fea_list[i]).mean(axis=0,keepdim=False)
-                    stdList[i]=torch.std(torch.stack(fea_list[i]),axis=0)+inf
-        
-        self.centerList=centerList
-        self.stdList=stdList
-
+            cluster_checkpoint=torch.load(os.path.join(savepath,'new_cluster.t7'))
+            self.centerList=cluster_checkpoint['centerList']
+            self.stdList=cluster_checkpoint['stdList']
+            self.cluster.load_state_dict(cluster_checkpoint['cluster'])
+            self.cluster.eval()
             # with torch.no_grad():
             #     bar = tqdm(total=len(self.dataset.test_dataloader), desc=f"test epoch {epoch}")
             #     for data in self.dataset.test_dataloader:
@@ -1322,9 +1372,8 @@ class MultiExperts():
         
 
 
-    def train(self,EPOCH,savepath):
+    def train(self,EPOCH,savepath,num):
         plt_loss_list=[[],[],[],[],[],[],[],[],[]]
-        inf=1e-9
         for epoch in range(EPOCH):
         
             for i in range(len(self.modelList)):
@@ -1343,8 +1392,8 @@ class MultiExperts():
             space_fea=[]
             space_y=[]
 
-            train_loss=[[inf]*10,[inf]*10,[inf]*10]
-            train_loss_cnt=[[0]*10,[0]*10,[0]*10]
+            # train_loss=[[inf]*10,[inf]*10,[inf]*10]
+            # train_loss_cnt=[[0]*10,[0]*10,[0]*10]
             for data in self.dataset.train_dataloader:
                 if (data['xs'][0][0]).size()[0]<10:
                     continue
@@ -1354,7 +1403,7 @@ class MultiExperts():
 
                 labels.append(model_id)
 
-                self.optimizer.zero_grad()
+                self.optimizer_list[model_id].zero_grad()
                 outputs_model_id,y,fea_model_id=self.train_forward(data,is_train=False,model=self.modelList[model_id])
 
                 space_fea.append(fea_model_id.cpu().squeeze(0))
@@ -1369,7 +1418,7 @@ class MultiExperts():
                 loss=loss_model_id
 
                 loss.backward()
-                self.optimizer.step()
+                self.optimizer_list[model_id].step()
                 
                 fea_list[model_id].append(fea_model_id.squeeze(0))
                 y_list[model_id].append(y)
@@ -1378,11 +1427,11 @@ class MultiExperts():
                 l1_loss_list[model_id]+=l1_loss_sub
                 cnt_list[model_id]+=1
 
-                outputs_model_id=outputs_model_id.item()
-                tmp_id=int(float(outputs_model_id)/0.1)
-                if tmp_id>=0 and tmp_id<10:
-                    train_loss[model_id][tmp_id]+=float(l1_loss_sub)
-                    train_loss_cnt[model_id][tmp_id]+=1
+                # outputs_model_id=outputs_model_id.item()
+                # tmp_id=int(float(outputs_model_id)/0.1)
+                # if tmp_id>=0 and tmp_id<10:
+                #     train_loss[model_id][tmp_id]+=float(l1_loss_sub)
+                #     train_loss_cnt[model_id][tmp_id]+=1
 
                 # fea_list[-1].append(fea_model_total.squeeze(0))
                 # sum_loss_list[-1] += loss_model_total.item()
@@ -1402,10 +1451,10 @@ class MultiExperts():
                 
             bar.close()
 
-            for i in range(len(self.modelList)):
-                for j in range(10):
-                    train_loss[i][j]=1e5 if train_loss_cnt[i][j]==0 else train_loss[i][j]/train_loss_cnt[i][j]
-            self.train_loss=train_loss
+            # for i in range(len(self.modelList)):
+            #     for j in range(10):
+            #         train_loss[i][j]=1e5 if train_loss_cnt[i][j]==0 else train_loss[i][j]/train_loss_cnt[i][j]
+            # self.train_loss=train_loss
             space_y=torch.stack(space_y).cpu().detach().numpy()
             space_fea=torch.stack(space_fea).cpu().detach().numpy()
             # labels=np.array(labels)
@@ -1491,7 +1540,7 @@ class MultiExperts():
                         # loss_weights.append(1.0/self.train_loss[i][int(float(sub_outputs.cpu())/0.1)])
                     _,_,fea=self.train_forward(data,is_train=False,model=self.backbone)
                     fea,_=self.cluster(fea)
-                    weights=self.whichCluster(fea.squeeze(0))
+                    weights=self.whichCluster(fea.squeeze(0),top1=False)
                     # loss_weights=[x/sum(loss_weights) for x in loss_weights]
                     # weights=self.weights_fusion(weights,loss_weights)
                     outputs=0
@@ -1550,7 +1599,6 @@ class MultiExperts():
                 'modelList': save_modelList,
                 'backbone':backboneList,
                 'cluster':self.cluster,
-                'loss':self.train_loss,
                 'acc': self.testloss_best,
                 'rmse':testloss2,
                 'test_hunxiao':self.test_hunxiao,

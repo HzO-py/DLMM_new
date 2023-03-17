@@ -100,7 +100,7 @@ class NoChange(nn.Module):#自定义类 继承nn.Module
         super(NoChange, self).__init__()#继承父类初始化函数
 
     def forward(self, x):
-        return x,x.transpose(0,1),x
+        return x,x.transpose(0,1)
 
 class ClusterCenter(nn.Module):
     def __init__(self,hiddenNum,cluster_num):
