@@ -278,29 +278,29 @@ class SingleModel():
 
     def time_extractor_train(self,EPOCH,savepath,is_selfatt):
         self.extractor.eval()
-        for epoch in range(EPOCH):
-            bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train epoch {epoch}")
-            for net in self.train_nets:
-                net.train()
-            sum_loss=0.0
-            l1_loss = 0.0
-            cnt=0
-            for data in self.dataset.train_dataloader:
-                if epoch==0:
-                    break
-                if (data['xs'][0][0]).size()[0]<10:
-                    continue
-                self.optimizer.zero_grad()
-                outputs,y,_=self.time_extractor_forward(data,is_train=True,is_selfatt=is_selfatt)
-                loss = self.train_criterion(outputs, y)
-                loss.backward()
-                self.optimizer.step()
-                sum_loss += loss.detach().data
-                l1_loss += self.test_criterion(outputs, y).detach().data
-                cnt+=1
-                bar.set_postfix(**{'Loss': '{:.3f}'.format(sum_loss / cnt), 'mae': '{:.3f}'.format(l1_loss / cnt)})
-                bar.update(1)
-            bar.close()
+        for epoch in range(1):
+            # bar = tqdm(total=len(self.dataset.train_dataloader), desc=f"train epoch {epoch}")
+            # for net in self.train_nets:
+            #     net.train()
+            # sum_loss=0.0
+            # l1_loss = 0.0
+            # cnt=0
+            # for data in self.dataset.train_dataloader:
+            #     if epoch==0:
+            #         break
+            #     if (data['xs'][0][0]).size()[0]<10:
+            #         continue
+            #     self.optimizer.zero_grad()
+            #     outputs,y,_=self.time_extractor_forward(data,is_train=True,is_selfatt=is_selfatt)
+            #     loss = self.train_criterion(outputs, y)
+            #     loss.backward()
+            #     self.optimizer.step()
+            #     sum_loss += loss.detach().data
+            #     l1_loss += self.test_criterion(outputs, y).detach().data
+            #     cnt+=1
+            #     bar.set_postfix(**{'Loss': '{:.3f}'.format(sum_loss / cnt), 'mae': '{:.3f}'.format(l1_loss / cnt)})
+            #     bar.update(1)
+            # bar.close()
 
             for net in self.train_nets:
                 net.eval()
@@ -313,8 +313,8 @@ class SingleModel():
             bar = tqdm(total=len(self.dataset.test_dataloader), desc=f"test epoch {epoch}")
             with torch.no_grad():
                 for data in self.dataset.test_dataloader:
-                    if (data['xs'][0][0]).size()[0]<10:
-                        continue
+                    # if (data['xs'][0][0]).size()[0]<10:
+                    #     continue
                     outputs,y,_=self.time_extractor_forward(data,is_train=False,is_selfatt=is_selfatt)
                     l2_loss_sub = self.train_criterion(outputs, y).detach().data
                     l1_loss_sub = self.test_criterion(outputs, y).detach().data
@@ -340,21 +340,21 @@ class SingleModel():
                 self.test_hunxiao=tmp
                 #print(self.test_hunxiao)
                 
-                if testloss < self.testloss_best:
-                    self.testloss_best = testloss
-                    state = {
-                    'extractor': self.extractor.state_dict(),
-                    'time_extractor': self.time_extractor.state_dict(),
-                    'regressor': self.regressor.state_dict(),
-                    'acc': self.testloss_best,
-                    'rmse': testloss2,
-                    'pcc': pcc,
-                    'ccc': ccc,
-                    'test_hunxiao': self.test_hunxiao
-                }
-                    torch.save(state, savepath)
-                    if epoch<=10:
-                        torch.save(state, savepath[:-3]+'_epoch10.t7')
+                # if testloss < self.testloss_best:
+                #     self.testloss_best = testloss
+                #     state = {
+                #     'extractor': self.extractor.state_dict(),
+                #     'time_extractor': self.time_extractor.state_dict(),
+                #     'regressor': self.regressor.state_dict(),
+                #     'acc': self.testloss_best,
+                #     'rmse': testloss2,
+                #     'pcc': pcc,
+                #     'ccc': ccc,
+                #     'test_hunxiao': self.test_hunxiao
+                # }
+                #     torch.save(state, savepath)
+                #     if epoch<=10:
+                #         torch.save(state, savepath[:-3]+'_epoch10.t7')
                 
                 print('  [Test] mae: %.06f  [Best] mae: %.06f'% (testloss,self.testloss_best))
                 print(['{:.3f}'.format(elem) for elem in self.test_hunxiao])
@@ -1082,7 +1082,7 @@ class MultiExperts():
 
         return weights
     
-    def whichCluster_2(self,x,top1=False):
+    def whichCluster_mul_test(self,x,top1=False):
         inf=1e-15
         dis_list=[]
         #x_fea=self.backbone_forward(x)
@@ -1090,27 +1090,29 @@ class MultiExperts():
             dis=self.GuassianDist(x[i],self.centerList[i],self.stdList[i])
             dis_list.append(dis)
         weights=[]
+        if sum(dis_list)==0:
+            dis_list=[inf for _ in range(len(dis_list))]
         for i in range(len(dis_list)):
-            weights.append(dis_list[i]/(sum(dis_list)+inf))
+            weights.append(dis_list[i]/(sum(dis_list)))
 
         if top1:
             max_id=weights.index(max(weights))
-            return max_id
+            # return max_id
             for i in range(len(self.modelList)):
                 weights[i]=1 if i==max_id else 0
 
         return weights
 
-    def whichCluster_mul(self,x,modal=None,top1=False):
+    def whichCluster_mul(self,x,begin,end,top1=False):
         inf=1e-15
         dis_list=[]
         #x_fea=self.backbone_forward(x)
-        for i in range(len(self.modelList))[modal*3:(modal+1)*3]:
+        for i in range(len(self.modelList))[begin:end]:
             dis=self.GuassianDist(x,self.centerList[i],self.stdList[i])
             dis_list.append(dis)
         weights=[]
         for i in range(len(dis_list)):
-            weights.append(dis_list[i]/(sum(dis_list)+inf))
+            weights.append(dis_list[i]/(sum(dis_list)))
         if top1:
             max_id=weights.index(max(weights))
             for i in range(len(dis_list)):
@@ -1149,19 +1151,23 @@ class MultiExperts():
         self.test_criterion=nn.L1Loss()
         self.test_criterion.requires_grad_ = False
 
-    def mul_train_init(self,checkpointList,dataset,backboneList,clusterList,regressor):
+    def mul_train_init(self,checkpointList,dataset,backboneList,regressor:Regressor,modelNum):
         inf=1e-9
-        for i in range(len(self.modelList)):
-            self.modelList[i].load_time_checkpoint(checkpointList[int(i/3)]["modelList"][int(i%3)])
-            self.modelList[i].extractor.eval()
-            self.modelList[i].time_extractor.eval()
-            self.modelList[i].regressor.eval()
+        cnt=0
+        self.modelNum=modelNum
+        for k in range(len(modelNum)):
+            for i in range(cnt,cnt+modelNum[k]):
+                self.modelList[i].load_time_checkpoint(checkpointList[k]["modelList"][i-cnt])
+                self.modelList[i].extractor.eval()
+                self.modelList[i].time_extractor.eval()
+                self.modelList[i].regressor.eval()
+            cnt+=modelNum[k]
 
         self.backbone_list=backboneList
         self.cluster_list=[]
         self.centerList=[]
         self.stdList=[]
-        for i in range(int(len(self.modelList)/3)):
+        for i in range(len(modelNum)):
             self.centerList+=checkpointList[i]["centerList"]
             self.stdList+=checkpointList[i]["stdList"]
             self.backbone_list[i].load_time_checkpoint(checkpointList[i]["backbone"])
@@ -1187,23 +1193,22 @@ class MultiExperts():
         self.optimizer=optim.Adam(chain(*[net.parameters() for net in nets]), lr=0.001,weight_decay=0.0001)
         self.testloss_best=1e5
 
-    def mul_test_init(self,checkpointList,dataset):
+    def mul_test_init(self,checkpointList,dataset,modelNum):
         inf=1e-9
-        for i in range(len(self.modelList)):
-            self.modelList[i].load_time_checkpoint(checkpointList[i//3]["modelList"][i%3])
-            self.modelList[i].extractor.eval()
-            self.modelList[i].time_extractor.eval()
-            self.modelList[i].regressor.eval()
-
-        for i in range(len(checkpointList)):
-            print(checkpointList[i]["acc"])
-            print(checkpointList[i]["test_hunxiao"])
-
+        self.modelNum=modelNum
+        cnt=0
         self.centerList=[]
         self.stdList=[]
-        for i in range(len(self.modelList)//3):
-            self.centerList+=checkpointList[i]["centerList"]
-            self.stdList+=checkpointList[i]["stdList"]
+        for k in range(len(modelNum)):
+            for i in range(cnt,cnt+modelNum[k]):
+                self.modelList[i].load_time_checkpoint(checkpointList[k]["modelList"][i-cnt])
+                self.modelList[i].extractor.eval()
+                self.modelList[i].time_extractor.eval()
+                self.modelList[i].regressor.eval()
+            self.centerList+=checkpointList[k]["centerList"]
+            self.stdList+=checkpointList[k]["stdList"]
+            cnt+=modelNum[k]
+
         self.dataset=dataset
         self.test_hunxiao=[[],[],[],[],[],[],[],[],[],[]]
         
@@ -1232,10 +1237,14 @@ class MultiExperts():
                 outputs_list=[]
                 fea_list=[]
                 for i in range(len(self.modelList)):
-                    sub_outputs,y,fea=self.train_forward(data,is_train=False,model=self.modelList[i])
+                    sub_outputs,y,_=self.train_forward(data,is_train=False,model=self.modelList[i])
                     outputs_list.append(sub_outputs)
-                    fea_list.append(fea.squeeze(0))
-                weights=self.whichCluster(fea_list)
+                for i in range(len(self.modelNum)):
+                    _,_,fea=self.train_forward(data,is_train=False,model=self.backbone_list[i])
+                    fea,_=self.cluster_list[i](fea)
+                    for _ in range(self.modelNum[i]):
+                        fea_list.append(fea.squeeze(0))
+                weights=self.whichCluster_mul_test(fea_list)
                 outputs=0
                 for i in range(len(self.modelList)):
                     outputs+=weights[i]*outputs_list[i]
@@ -1618,21 +1627,35 @@ class MultiExperts():
 
     def train_fusioner_helper(self,data):
         fea_list=[]
+        fea_list_backbone=[]
         weights=[]
         fea_modal_list=[]
+        att=[]
         with torch.no_grad():
             for i in range(len(self.modelList)):
                 _,y,fea=self.train_forward(data,is_train=False,model=self.modelList[i])
                 fea_list.append(fea.squeeze(0))
-            for i in range(len(self.modelList)//3):
+            cnt=0
+            for i in range(len(self.modelNum)):
                 _,_,fea=self.train_forward(data,is_train=False,model=self.backbone_list[i])
                 fea,_=self.cluster_list[i](fea)
-                weights=self.whichCluster_mul(fea.squeeze(0),modal=i,top1=False)
-                fea_modal=weights[0]*fea_list[i*3]
-                for j in range(2):
-                    fea_modal+=weights[j+1]*fea_list[i*3+j+1]
+                for _ in range(self.modelNum[i]):
+                    fea_list_backbone.append(fea.squeeze(0))
+                weights=self.whichCluster_mul(fea.squeeze(0),begin=cnt,end=cnt+self.modelNum[i],top1=False)
+                fea_modal=weights[0]*fea_list[cnt]
+                for j in range(self.modelNum[i]-1):
+                    fea_modal+=weights[0+j+1]*fea_list[cnt+j+1]
                 fea_modal_list.append(fea_modal)
+                cnt+=self.modelNum[i]
+
+            # cnt=0
+            # att=self.whichCluster_mul_test(fea_list_backbone)
+            # for i in range(len(self.modelNum)):
+            #     fea_modal_list[i]*=sum(att[cnt:cnt+self.modelNum[i]])
+            #     cnt+=self.modelNum[i]
+
             fea=torch.cat(tuple(fea_modal_list),dim=-1)
+
         return fea,y
 
     def train_fusioner(self,EPOCH,savepath):
@@ -1667,7 +1690,7 @@ class MultiExperts():
                 # bar.set_postfix(**{'Loss': sum_loss / cnt, 'mae': l1_loss / cnt})
                 bar.update(1)
             bar.close()
-            print('  [Train] loss: %.06f  mae: %.06f'% (sum_loss.item()/cnt,l1_loss.item()/cnt))
+            # print('  [Train] loss: %.06f  mae: %.06f'% (sum_loss.item()/cnt,l1_loss.item()/cnt))
 
             self.regressor.eval()
             cnt=0
